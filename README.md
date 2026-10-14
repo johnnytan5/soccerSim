@@ -4,7 +4,7 @@ A desktop simulator for testing **Robotedge's soccer brain** (`brain_node` from
 [Robotedge-5v5-RCAP2026](https://github.com/Robotedge-UM/Robotedge-5v5-RCAP2026)) without a robot.
 
 It runs the team's real, unmodified `brain_node` against a simulated Booster T2 on a RoboCup field
-(MuJoCo, macOS). Brain gets the same ROS topics and RPCs it gets on the robot, so it can't tell the
+(MuJoCo; Linux/WSL2 or macOS). Brain gets the same ROS topics and RPCs it gets on the robot, so it can't tell the
 difference. You can try a behaviour-tree or strategy change on your laptop, fire shots at the keeper,
 run set plays and watch what the robot decides, all before taking it to the field.
 
@@ -55,49 +55,81 @@ power, or anything that depends on the vision model's exact numbers.
 ```
 
 The sim never modifies the Robotedge repo. `pixi run build-sim` copies `src/brain` into this repo,
-applies `patches/brain-clang.patch` and builds it. The patch is 8 lines that macOS clang needs and
-the robot's GCC doesn't; behaviour is unchanged. Brain runs with the Robotedge `config.yaml`, but
-with rerun logging and team UDP turned off.
+applies two small patches and builds it:
+
+- `patches/brain-clang.patch`: 8 lines that clang needs and the robot's GCC doesn't. Behaviour is unchanged.
+- `patches/brain-decision-topic.patch`: an observer-only publisher, `/brain/decision`, so the viewer
+  overlay can show every decision change. Optional: if it stops applying the build warns and the
+  overlay falls back to brain's rate-limited `/speak` announcements.
+
+Brain runs with the Robotedge `config.yaml`, but with rerun logging and team UDP turned off.
 
 ## Requirements
 
-- An Apple Silicon Mac. The pixi environment is `osx-arm64` only.
-- [pixi](https://pixi.sh): `curl -fsSL https://pixi.sh/install.sh | bash`. It installs ROS 2 Kilted,
-  MuJoCo, PyTorch and the compilers into this folder, so nothing else needs installing system-wide.
-- A clone of the Robotedge repo, by default at `~/Robotedge-5v5-RCAP2026`.
-- The Booster SDK release zip, `sdk_release.zip`. It's the same SDK the robot setup in the Robotedge
-  README installs; the build only uses its headers. The default location is
-  `~/Downloads/sdk_release.zip`. Ask a teammate if you don't have it.
+- Linux x86-64 (verified on Ubuntu 24.04 under WSL2) or an Apple Silicon Mac. Both are in the pixi
+  environment. Other architectures (Linux arm64) aren't covered.
+- `git curl rsync patch unzip` (e.g. `sudo apt install git curl rsync patch unzip`; `setup.sh`
+  tells you what is missing).
+- A clone of the Robotedge repo. It's found at `$ROBOTEDGE_ROOT`, else in a sibling folder named
+  `Robotedge-5v5-RCAP2026`, else at `~/Robotedge-5v5-RCAP2026`.
 
-If either one lives somewhere else, export its path before you build and run:
-
-```bash
-export ROBOTEDGE_ROOT=/path/to/Robotedge-5v5-RCAP2026
-export SDK_ZIP=/path/to/sdk_release.zip
-```
+Everything else is downloaded by the setup: [pixi](https://pixi.sh) itself, ROS 2 Kilted, MuJoCo,
+PyTorch and the compilers (into `.pixi/`, nothing system-wide), the Booster submodules, Booster's YOLOv8
+ball model, the Booster SDK headers (from Booster's public
+[booster_robotics_sdk](https://github.com/BoosterRobotics/booster_robotics_sdk) repo; set
+`SDK_ZIP=/path/to/sdk_release.zip` to use your own copy instead) and the rerun C++ SDK.
 
 ## Setup (once)
 
 ```bash
 git clone --recurse-submodules <this repo> soccerSim && cd soccerSim
-pixi install                # ROS 2, MuJoCo, Python deps (a few GB; takes a while)
-pixi run fetch-models       # Booster's YOLOv8 ball model (checksum-verified)
-pixi run build-sim          # copy and build brain from $ROBOTEDGE_ROOT, build the bridge
-pixi run test               # quick sanity check
+bash scripts/setup.sh
 ```
 
-The first `build-sim` also builds the rerun C++ SDK that brain links against, which takes several
-minutes. Later builds only rebuild brain.
+That installs the environment (a few GB), builds brain and the bridge, and runs the unit tests. The
+first build also compiles the rerun C++ SDK that brain links against, which takes several minutes.
+It is safe to re-run. The individual steps are `pixi install`, `pixi run fetch-models`,
+`pixi run build-sim` and `pixi run test`.
+
+If the Robotedge repo lives somewhere else, `export ROBOTEDGE_ROOT=/path/to/Robotedge-5v5-RCAP2026`
+before setup and before every run.
+
+### Linux notes
+
+- **The viewer runs in its own process on Linux**, fed the robot and ball poses by the sim. Rendering it inside
+  the sim process made the two fight for the CPU and dropped the sim to about 30 Hz. Now it holds the
+  50 Hz target with the viewer open. `--viewer` needs a display (X11 or Wayland). On WSL2, WSLg
+  provides one and `DISPLAY=:0` is set for you if your shell hasn't.
+- **The head camera renders offscreen through EGL**, so no display is needed without `--viewer`. On
+  WSL2 it uses Mesa's software rasteriser (llvmpipe): the camera frame is small, and WSL's D3D12 driver
+  stalls ~25 ms per frame reading it back, 5x slower than the CPU. The viewer window still uses your
+  GPU. `SIM_CAMERA_GL=software` forces llvmpipe on any Linux (e.g. if EGL finds no usable GPU) and
+  `SIM_CAMERA_GL=gpu` keeps the system driver. Export `MUJOCO_GL` to override the backend.
 
 ## Run
 
 ```bash
-pixi run bash scripts/run_sim.sh --viewer role:=goal_keeper                    # keeper
-pixi run bash scripts/run_sim.sh --viewer --quick role:=striker player_id:=2   # striker, fast start
+pixi run keeper-quick     # goalkeeper, skips the match procedure
+pixi run keeper           # goalkeeper, full match procedure
+pixi run striker          # striker (player 2), skips the match procedure
 ```
 
+These are shortcuts for `pixi run bash scripts/run_sim.sh --viewer [--quick] role:=...`.
 Then open the controller tab at **http://127.0.0.1:8765/**. Leave out `--viewer` to run without the
-MuJoCo window, which is faster.
+MuJoCo window.
+
+The text along the top of the viewer is brain's live state:
+
+| Row | Shows |
+|---|---|
+| brain decision | `find`, `retreat`, `save`, `chase`, ... as brain's behaviour tree decides it |
+| walk command | the velocity brain asks the robot for (`vx`, `vy`, `yaw`), `[manual]` while the gamepad drives |
+| ball speed | in m/s |
+| robot mode | `soccer`, `prepare`, ... and `(kicking)` during a visual kick |
+| referee | game state, set play and who kicks |
+| brain said | brain's last spoken announcement (`game state PLAYING`, `camera lost`, ...) |
+| shots | goal / no-goal tally and the last result |
+| sim rate | achieved tick rate against the 50 Hz target |
 
 - **By default the sim follows the real match procedure.** The robot boots in prepare mode at the
   sideline. In the controller tab, press **Stand up (LT+Up)**, **Recalibrate (LT+A)**, then
@@ -176,9 +208,15 @@ pixi run test-ros    # bridge tests: needs build-sim, and no other sim on the sa
 
 ## Known limitations
 
-- **With the viewer open, the sim runs slower than real time.** On an M-series Mac it can drop to
-  about half speed, but brain uses the wall clock, so the ball looks slower to brain than the shot
-  you fired. Run without `--viewer` when timing matters.
+- **The sim is only real time if the machine keeps up.** Brain uses the wall clock, so a sim below
+  50 Hz makes the ball look slower to brain than the shot you fired. On Linux/WSL2 it holds 50 Hz with
+  the viewer open. On a Mac the viewer shares the sim's process and can slow it to about half speed;
+  run without `--viewer` when timing matters.
+- If the sim logs `sim ticking at N Hz (target 50)`, something else is using the CPU. The overlay's
+  sim rate shows the same number.
+- On Linux the viewer is a separate process that replays the sim's state. The shot sliders and
+  Ctrl+right-drag on the robot or ball are passed back to the sim, but the viewer's Backspace reset and
+  the physics options in its right panel only change the viewer's own copy.
 - The kick is an approximation (`soccer_sim/kick_model.py`), not Booster's policy.
 - The ball is detected by Booster's public sim-trained YOLOv8, not the team's own model, which only
   runs on the Jetson with TensorRT.

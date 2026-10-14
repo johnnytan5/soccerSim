@@ -189,6 +189,11 @@ class SoccerController(BaseController):
         q = self.mj_data.qpos
         return Pose2D(float(q[0]), float(q[1]), yaw_from_quat_wxyz(q[3:7]))
 
+    @property
+    def n_robot_ctrl(self) -> int:
+        """Robot motors are ctrl[:n]; the shot-launcher sliders follow."""
+        return self._nu_robot
+
     def ball_position(self) -> np.ndarray:
         return self.mj_data.qpos[self._ball_q:self._ball_q + 3].copy()
 

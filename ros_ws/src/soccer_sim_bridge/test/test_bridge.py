@@ -176,3 +176,35 @@ def test_scripted_shot_scores_and_reports_goal(h):
     h.ticks(60)  # 1.2 s of sim: 2 m to the line at 6 m/s
     assert any(m.data == "goal" for m in h.got["result"])
     assert h.bridge.status()["shots"]["goal"] == 1
+
+
+def _overlay(h):
+    left, right = h.bridge.overlay()
+    return dict(zip(left.split("\n"), right.split("\n")))
+
+
+def test_overlay_shows_brain_decision_and_walk_command(h):
+    h.bridge.on_decision(String(data="save"))
+    h.send(2001, json.dumps({"vx": 0.5, "vy": -0.25, "vyaw": 0.1}))  # kMove
+    h.ticks(5)
+    rows = _overlay(h)
+    assert rows["brain decision"] == "save"
+    assert rows["walk command"].startswith("vx +0.50  vy -0.25  yaw +0.10")
+    assert rows["robot mode"].startswith("soccer")
+    assert rows["ball speed"].endswith("m/s")
+
+
+def test_overlay_uses_speak_for_decisions_only_without_the_decision_topic(h):
+    h.bridge.on_speak(String(data="retreat"))
+    h.bridge.on_speak(String(data="game state PLAYING"))
+    rows = _overlay(h)
+    assert rows["brain decision"] == "retreat" and rows["brain said"] == "game state PLAYING"
+    h.bridge.on_decision(String(data="save"))
+    h.bridge.on_speak(String(data="find"))  # stale, rate-limited: ignored once /brain/decision is live
+    assert _overlay(h)["brain decision"] == "save"
+
+
+def test_overlay_reports_the_shot_tally(h):
+    h.bridge._status["shots"] = {"goal": 2, "no_goal": 1}
+    h.bridge._status["last_shot"] = "goal"
+    assert _overlay(h)["shots"] == "goal 2  /  no goal 1   last: goal"
