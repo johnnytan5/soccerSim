@@ -1,5 +1,6 @@
 """ROS 2 stand-in for the Booster T2 SDK, head camera, and vision stack, backed by soccer_sim."""
 
+import os
 import sys
 import threading
 import time
@@ -26,6 +27,7 @@ from soccer_sim.shots import SHOT_FIELDS, Shot, ShotPanel, ShotTracker, shot_fro
 from soccer_sim.sim import SoccerController
 
 from . import msg_conv
+from .viewer_link import ViewerLink
 from .web import ControlServer
 
 REFEREE_KEYS = {"state", "set_play", "kicking", "stopped"}
@@ -258,14 +260,20 @@ class SimBridge(Node):
         super().destroy_node()
 
 
-def _run_realtime(node: SimBridge, viewer) -> None:
+def _run_realtime(node: SimBridge, viewer, link: ViewerLink | None = None) -> None:
+    """viewer: MuJoCo's passive-viewer handle (macOS, drawn in this process); link: separate viewer process."""
     period = node.sim.cfg.policy_dt
     next_t = time.monotonic()
-    while rclpy.ok() and (viewer is None or viewer.is_running()):
+    n_robot = node.sim.n_robot_ctrl
+    while rclpy.ok() and (viewer is None or viewer.is_running()) and (link is None or link.is_running()):
+        if link is not None:
+            node.sim.mj_data.ctrl[n_robot:] = link.sliders()  # the shot sliders live in the viewer process
         node.tick()
         if viewer is not None:
             viewer.cam.lookat[:] = node.sim.mj_data.qpos[0:3]
             viewer.sync()
+        if link is not None:
+            link.sync(node.sim.mj_data.qpos)
         next_t += period
         delay = next_t - time.monotonic()
         if delay > 0:
@@ -275,18 +283,36 @@ def _run_realtime(node: SimBridge, viewer) -> None:
             next_t = time.monotonic()
 
 
+def _pick_camera_gl() -> None:
+    """Choose Mesa's software rasteriser for the head camera on WSL, where the GPU path is slower.
+
+    The camera frame is small (544x448); WSL's D3D12 driver stalls ~25 ms per frame reading it back, ~5x slower
+    than llvmpipe. SIM_CAMERA_GL=software forces llvmpipe on any Linux (e.g. when EGL finds no usable GPU),
+    SIM_CAMERA_GL=gpu keeps whatever driver the system picks. Default "auto" is software on WSL only.
+    """
+    if not sys.platform.startswith("linux") or os.environ.get("MUJOCO_GL") != "egl":
+        return
+    mode = os.environ.get("SIM_CAMERA_GL", "auto")
+    on_wsl = "microsoft" in open("/proc/version").read().lower() if os.path.exists("/proc/version") else False
+    if mode == "software" or (mode == "auto" and on_wsl):
+        os.environ["GALLIUM_DRIVER"] = "llvmpipe"
+
+
 def main(argv=None) -> None:
     argv = sys.argv if argv is None else argv
     use_viewer = "--viewer" in argv
+    viewer_env = dict(os.environ)  # the viewer keeps the desktop's GL driver; only the camera is switched
+    _pick_camera_gl()
     rclpy.init(args=[a for a in argv if a != "--viewer"])
     node = SimBridge()
     executor = SingleThreadedExecutor()
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     node.sim.start()
+    link = None
     try:
-        if use_viewer:
-            import mujoco.viewer  # needs mjpython on macOS
+        if use_viewer and sys.platform == "darwin":
+            import mujoco.viewer  # needs mjpython on macOS, which drives the viewer from this process
 
             with mujoco.viewer.launch_passive(
                 node.sim.mj_model, node.sim.mj_data, show_left_ui=False, show_right_ui=True
@@ -295,11 +321,18 @@ def main(argv=None) -> None:
                     # Hide the robot motors so the top-right Control panel shows only the shot sliders.
                     viewer.opt.actuatorgroup[ROBOT_ACTUATOR_GROUP] = 0
                 _run_realtime(node, viewer)
+        elif use_viewer:
+            link = ViewerLink(
+                node.sim.mj_model, node.sim.n_robot_ctrl, node.sim.mj_data.ctrl[node.sim.n_robot_ctrl:], env=viewer_env
+            )
+            _run_realtime(node, None, link)
         else:
             _run_realtime(node, None)
     except KeyboardInterrupt:
         pass
     finally:
+        if link is not None:
+            link.close()
         executor.shutdown()
         node.destroy_node()
         if rclpy.ok():
