@@ -13,11 +13,16 @@ source "$ROOT/ros_ws/install/setup.bash"
 set -u
 
 PY=python
+# MuJoCo's passive viewer needs its mjpython launcher on macOS; plain python works on Linux.
+VIEWER_PY=python
+if [ "$(uname -s)" = "Darwin" ]; then
+  VIEWER_PY=mjpython
+fi
 VIEWER=""
 MATCH_ARGS="-p boot_sequence:=true -p referee_schedule:=0:0"
 while [[ $# -gt 0 && "$1" == --* ]]; do
   case "$1" in
-    --viewer) PY=mjpython; VIEWER="--viewer" ;;
+    --viewer) PY="$VIEWER_PY"; VIEWER="--viewer" ;;
     --quick) MATCH_ARGS="" ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac

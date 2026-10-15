@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Soccer Sim Control Centre</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="/favicon.svg" alt="" width="28" height="28"><h1>Soccer Sim <span>Control Centre</span></h1></div>
+  <div class="chips" id="chips"></div>
+  <div class="spacer"></div>
+  <label class="switch" title="Rebuild rcap even if nothing changed"><input type="checkbox" id="force"><span class="track"></span><span class="switch-label">Force rebuild</span></label>
+  <button class="btn ghost icon" id="btn-refresh" title="Re-read the rcap clone (git state + build fingerprint)" aria-label="Refresh rcap status">⟳</button>
+  <button class="btn primary" id="btn-launch">▶ Launch</button>
+  <button class="btn danger" id="btn-stop" disabled>■ Stop</button>
+</header>
+<div id="banner" class="banner" hidden></div>
+<nav class="tabs" role="tablist">
+  <button role="tab" id="tab-launch" aria-controls="view-launch" aria-selected="true">Launch</button>
+  <button role="tab" id="tab-control" aria-controls="view-control" aria-selected="false">Control <span class="dot" id="control-dot"></span></button>
+</nav>
+<main>
+  <section id="view-launch" role="tabpanel" class="launch-grid">
+    <aside class="col-left">
+      <div class="card"><h2>Presets</h2><div id="presets" class="list"></div></div>
+      <div class="card"><h2>Saved profiles</h2>
+        <div class="row-inline"><input id="profile-name" type="text" maxlength="40" placeholder="profile name" aria-label="Profile name"><button class="btn" id="btn-save-profile">Save</button></div>
+        <div id="profiles" class="list"></div></div>
+      <div class="card"><h2>Tools</h2><div id="tools" class="tools"></div></div>
+    </aside>
+    <div class="col-mid"><form class="card form" id="form" autocomplete="off" onsubmit="return false"></form></div>
+    <aside class="col-right">
+      <div class="card" id="rcap-card"><h2>rcap clone</h2><div id="rcap"></div></div>
+      <div class="card"><h2>Pre-flight</h2><ul id="checks" class="checks"></ul></div>
+      <div class="card"><h2>Command <button class="btn ghost small" id="btn-copy">Copy</button></h2><pre id="preview" class="preview"></pre>
+        <p class="hint">The sim's own control port is picked automatically and proxied through this page.</p></div>
+    </aside>
+  </section>
+
+  <section id="view-control" role="tabpanel" class="control-grid" hidden>
+    <div class="overlay" id="no-sim" hidden>
+      <div><h2>The sim isn't running</h2><p id="no-sim-text">Launch it from the Launch tab to drive, place the ball and robot, and fire shots.</p><button class="btn primary" id="btn-go-launch">Go to Launch</button></div>
+    </div>
+    <div class="col-map">
+      <div class="card map-card">
+        <div class="map-head">
+          <h2>Field</h2>
+          <div class="seg" role="radiogroup" aria-label="Map tool" id="map-tools">
+            <label><input type="radio" name="maptool" value="ball" checked><span>● Ball</span></label>
+            <label><input type="radio" name="maptool" value="robot"><span>➤ Robot</span></label>
+            <label><input type="radio" name="maptool" value="shot"><span>↗ Shot</span></label>
+          </div>
+        </div>
+        <svg id="pitch" viewBox="-12.2 -7.9 24.4 15.8" role="img" aria-label="Top-down field. Our goal is on the left."></svg>
+        <p class="hint" id="map-hint"></p>
+        <div class="shot-controls" id="shot-controls">
+          <label>Speed <output id="out-speed">6.0</output> m/s<input type="range" id="shot-speed" min="0" max="15" step="0.5" value="6"></label>
+          <label>Elevation <output id="out-elev">0</output>°<input type="range" id="shot-elev" min="0" max="80" step="1" value="0"></label>
+        </div>
+        <div class="readout" id="map-readout">&nbsp;</div>
+      </div>
+      <div class="card"><h2>Ball &amp; robot shortcuts</h2>
+        <div class="btn-row"><button class="btn" id="reset-ball">Ball to centre spot</button><button class="btn" id="reset-robot">Robot to goal centre</button><button class="btn" id="fire-panel" title="Needs the MuJoCo viewer window">Fire MuJoCo sliders</button></div>
+        <h3>Ball spots <small>(in the keeper's detection range)</small></h3><div class="btn-row" id="ball-spots"></div>
+        <h3>Preset shots at our goal</h3><div id="shot-presets"></div>
+      </div>
+    </div>
+    <div class="col-side">
+      <div class="card"><h2>Status</h2><div id="status"></div></div>
+      <div class="card"><h2>Referee</h2>
+        <div class="btn-row" id="ref-states"></div>
+        <div class="ref-form">
+          <label>Set play <select id="setplay"><option>NONE</option><option>DIRECT_FREE_KICK</option><option>INDIRECT_FREE_KICK</option><option>PENALTY_KICK</option><option>THROW_IN</option><option>GOAL_KICK</option><option>CORNER_KICK</option></select></label>
+          <div class="seg" role="radiogroup" aria-label="Who kicks"><label><input type="radio" name="kicking" value="opponent" checked><span>opponent kicks</span></label><label><input type="radio" name="kicking" value="us"><span>we kick</span></label></div>
+          <label class="check"><input type="checkbox" id="stopped"> stopped (ball being placed)</label>
+          <button class="btn" id="apply">Apply set play</button>
+        </div></div>
+      <div class="card"><h2>Drive <small id="pad">drag the sticks · a connected gamepad is used automatically</small></h2>
+        <div class="sticks">
+          <figure><canvas id="left" width="180" height="180" aria-label="Left stick: walk"></canvas><figcaption>Walk</figcaption></figure>
+          <figure><canvas id="right" width="180" height="180" aria-label="Right stick: turn"></canvas><figcaption>Turn</figcaption></figure>
+        </div>
+        <div class="btn-row combos">
+          <button class="btn" data-combo="hat_u">Stand up <kbd>LT+↑</kbd></button>
+          <button class="btn" data-combo="a">Recalibrate <kbd>LT+A</kbd></button>
+          <button class="btn" data-combo="b">Auto <kbd>LT+B</kbd></button>
+          <button class="btn" data-combo="x">Cancel / manual <kbd>LT+X</kbd></button>
+        </div>
+        <details><summary>All gamepad buttons</summary><div class="btn-row" id="buttons"></div></details>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="drawer" id="drawer" data-open="false">
+  <div class="drawer-bar">
+    <button class="btn ghost small" id="drawer-toggle" aria-expanded="false">▲ Logs</button>
+    <span class="last-line" id="last-line"></span>
+    <label class="check small"><input type="checkbox" id="log-follow" checked> follow</label>
+    <button class="btn ghost small" id="log-copy">Copy</button>
+    <button class="btn ghost small" id="log-clear">Clear</button>
+  </div>
+  <pre class="log" id="log" tabindex="0" aria-live="off"></pre>
+</div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="/app.js"></script>
+</body>
+</html>

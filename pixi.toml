@@ -1,7 +1,7 @@
 [workspace]
 name = "soccer-sim"
 channels = ["robostack-kilted", "conda-forge"]
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 
 [dependencies]
 python = "3.12.*"
@@ -32,10 +32,11 @@ onnxruntime = "*"
 soccer_sim = { path = ".", editable = true }
 booster_assets = { path = "vendor/booster_assets", editable = true }
 
+[activation]
+scripts = ["scripts/activate.sh"]
+
 [activation.env]
 PYTHONPATH = "$PIXI_PROJECT_ROOT/vendor/booster_deploy"
-ROBOTEDGE_ROOT = "${ROBOTEDGE_ROOT:-$HOME/Robotedge-5v5-RCAP2026}"
-SDK_ZIP = "${SDK_ZIP:-$HOME/Downloads/sdk_release.zip}"
 
 [tasks]
 fetch-models = "bash scripts/fetch_models.sh"
@@ -44,3 +45,7 @@ build-sim = { cmd = "bash scripts/setup_ws.sh", env = { PACKAGES = "brain soccer
 test-ros = "bash -c 'source ros_ws/install/setup.bash && pytest -m \"ros and not slow\" ros_ws/src/soccer_sim_bridge/test -p no:cacheprovider'"
 test = "pytest -m 'not slow and not ros'"
 test-slow = "pytest -m slow"
+launch = "python -m soccer_launcher"
+keeper = "bash scripts/run_sim.sh --viewer role:=goal_keeper"
+keeper-quick = "bash scripts/run_sim.sh --viewer --quick role:=goal_keeper"
+striker = "bash scripts/run_sim.sh --viewer --quick role:=striker player_id:=2"

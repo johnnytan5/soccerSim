@@ -1,9 +1,12 @@
 """ROS 2 stand-in for the Booster T2 SDK, head camera, and vision stack, backed by soccer_sim."""
 
+import os
 import sys
 import threading
 import time
 
+import mujoco
+import numpy as np
 import rclpy
 from booster_interface.msg import LowState, Odometer, RemoteControllerState
 from booster_msgs.msg import RpcReqMsg, RpcRespMsg
@@ -21,14 +24,17 @@ from soccer_sim.field import ROBOT_ACTUATOR_GROUP
 from soccer_sim.joystick import FirmwareRemote, manual_velocity
 from soccer_sim.kick_model import KickRef
 from soccer_sim.loco_rpc import MODE_DAMPING, MODE_PREPARE, MODE_SOCCER, LocoState, handle_request
+from soccer_sim.placement import robot_pose_from_dict
 from soccer_sim.referee import SET_PLAYS, STATES, Referee, name_of, parse_schedule
 from soccer_sim.shots import SHOT_FIELDS, Shot, ShotPanel, ShotTracker, shot_from_dict
 from soccer_sim.sim import SoccerController
 
 from . import msg_conv
+from .viewer_link import ViewerLink
 from .web import ControlServer
 
 REFEREE_KEYS = {"state", "set_play", "kicking", "stopped"}
+MODE_NAMES = {0: "damping", 1: "prepare", 2: "walking", 3: "custom", 4: "soccer"}
 
 
 class SimBridge(Node):
@@ -78,12 +84,18 @@ class SimBridge(Node):
         self._joy: tuple[RemoteControllerState, float] | None = None
         self._pending_shots: list[Shot] = []
         self._fire_panel = False
-        self._reset_robot = False
+        self._reset_robot: tuple[float, float, float] | None = None
         self._status: dict = {}
+        self._decision = "-"  # brain's current decision ("retreat", "save", ...)
+        self._decision_topic = False  # True once /brain/decision (patches/brain-decision-topic.patch) has published
+        self._event = ""  # last longer announcement brain made ("game state PLAYING", ...)
+        self._rate_t, self._rate_ticks, self.tick_hz = time.monotonic(), 0, 0.0
 
         self.create_subscription(RpcReqMsg, "LocoApiTopicReq", self.on_rpc, 10)
         self.create_subscription(Kick, "/kick_ball", self.on_kick_ball, 10)
         self.create_subscription(Float64MultiArray, "/sim/shoot", self.on_sim_shoot, 10)
+        self.create_subscription(String, "/speak", self.on_speak, 10)
+        self.create_subscription(String, "/brain/decision", self.on_decision, 10)
         self.resp_pub = self.create_publisher(RpcRespMsg, "LocoApiTopicResp", 10)
         self.odom_pub = self.create_publisher(Odometer, "/odometer_state", 10)
         self.low_pub = self.create_publisher(LowState, "/low_state", 10)
@@ -128,6 +140,20 @@ class SimBridge(Node):
         with self.lock:
             self.kick_ref = ref
 
+    def on_speak(self, msg: String) -> None:
+        # Brain's espeak announcements: sentences are events. Single words are decisions, but /speak is
+        # rate-limited, so they only count when the patched brain's /brain/decision isn't there.
+        with self.lock:
+            if " " in msg.data.strip():
+                self._event = msg.data
+            elif not self._decision_topic:
+                self._decision = msg.data
+
+    def on_decision(self, msg: String) -> None:
+        with self.lock:
+            self._decision_topic = True
+            self._decision = msg.data or "-"
+
     def on_sim_shoot(self, msg: Float64MultiArray) -> None:
         if len(msg.data) != len(SHOT_FIELDS):
             self.get_logger().warning(f"/sim/shoot needs {len(SHOT_FIELDS)} values {SHOT_FIELDS}")
@@ -160,9 +186,10 @@ class SimBridge(Node):
             else:
                 self._pending_shots.append(shot)
 
-    def on_web_reset_robot(self, _payload: dict) -> None:
+    def on_web_reset_robot(self, payload: dict) -> None:
+        pose = robot_pose_from_dict(payload, self.sim.sim_cfg.field)  # {} = keeper's home
         with self.lock:
-            self._reset_robot = True
+            self._reset_robot = pose
 
     def status(self) -> dict:
         with self.lock:
@@ -183,10 +210,10 @@ class SimBridge(Node):
             self.sim.apply(self.loco, now, self.kick_ref, manual)
             shots, self._pending_shots = self._pending_shots, []
             fire_panel, self._fire_panel = self._fire_panel, False
-            reset_robot, self._reset_robot = self._reset_robot, False
+            reset_robot, self._reset_robot = self._reset_robot, None
 
-        if reset_robot:  # keeper's home: goal centre, 1 m in front of the line, facing the field
-            self.sim.reset_robot(-10.0, 0.0, 0.0)
+        if reset_robot is not None:
+            self.sim.reset_robot(*reset_robot)
 
         panel = self.sim.shot_panel_values()
         panel_shot = self.shot_panel.read(panel)
@@ -221,6 +248,7 @@ class SimBridge(Node):
             self.det_pub.publish(msg_conv.detections(stamp, dets))
             self.line_pub.publish(msg_conv.line_segments(stamp, lines))
 
+        pose, ball = self.sim.robot_pose(), self.sim.ball_position()
         with self.lock:
             ref = self.referee.snapshot(now)
             self._status = {
@@ -234,8 +262,48 @@ class SimBridge(Node):
                 "manual_drive": manual is not None,
                 "shots": dict(self.shot_tracker.tally),
                 "last_shot": self.last_shot,
+                "robot": {"x": pose.x, "y": pose.y, "yaw": pose.yaw},
+                "ball": {"x": float(ball[0]), "y": float(ball[1])},
+                "decision": self._decision,
+                "hz": round(self.tick_hz, 1),
             }
         self.tick_count += 1
+
+    def overlay(self) -> tuple[str, str]:
+        """Two text columns for the top of the viewer: labels, values."""
+        with self.lock:
+            st = dict(self._status)
+            decision, event = self._decision, self._event
+            mode, kicking = self.loco.mode, self.loco.kicking()
+            vx, vy, vyaw = self.loco.effective_velocity()
+        speed = float(np.linalg.norm(self.sim.ball_velocity()))
+        shots = st.get("shots", {})
+        left = ["brain decision", "walk command", "ball speed", "robot mode", "referee", "brain said", "shots", "sim rate"]
+        right = [
+            decision,
+            f"vx {vx:+.2f}  vy {vy:+.2f}  yaw {vyaw:+.2f}" + ("   [manual]" if st.get("manual_drive") else ""),
+            f"{speed:.1f} m/s",
+            MODE_NAMES.get(mode, str(mode)) + ("  (kicking)" if kicking else ""),
+            f"{st.get('state', '-')}  set play {st.get('set_play', '-')}  kick: {st.get('kicking', '-')}",
+            event or "-",
+            f"goal {shots.get('goal', 0)}  /  no goal {shots.get('no_goal', 0)}"
+            + (f"   last: {st['last_shot']}" if st.get("last_shot") else ""),
+            f"{self.tick_hz:.0f} Hz" + ("" if self.tick_hz >= 45 else "  (target 50, running slow)"),
+        ]
+        return "\n".join(left), "\n".join(right)
+
+    def note_tick(self) -> None:
+        """Measure the achieved tick rate; warn when the sim can't keep up (brain then sees a slowed world)."""
+        self._rate_ticks += 1
+        now = time.monotonic()
+        if now - self._rate_t >= 1.0:
+            self.tick_hz = self._rate_ticks / (now - self._rate_t)
+            self._rate_t, self._rate_ticks = now, 0
+            if self.tick_hz < 45 and self.tick_count > 250:  # not while the first frames warm up
+                self.get_logger().warning(
+                    f"sim ticking at {self.tick_hz:.0f} Hz (target 50): brain sees a slowed-down world",
+                    throttle_duration_sec=15.0,
+                )
 
     # ---- timers ----
     def publish_referee(self) -> None:
@@ -258,14 +326,27 @@ class SimBridge(Node):
         super().destroy_node()
 
 
-def _run_realtime(node: SimBridge, viewer) -> None:
+def _run_realtime(node: SimBridge, viewer, link: ViewerLink | None = None) -> None:
+    """viewer: MuJoCo's passive-viewer handle (macOS, drawn in this process); link: separate viewer process."""
     period = node.sim.cfg.policy_dt
     next_t = time.monotonic()
-    while rclpy.ok() and (viewer is None or viewer.is_running()):
+    n_robot = node.sim.n_robot_ctrl
+    frame = 0
+    while rclpy.ok() and (viewer is None or viewer.is_running()) and (link is None or link.is_running()):
+        if link is not None:
+            node.sim.mj_data.ctrl[n_robot:] = link.sliders()  # the shot sliders live in the viewer process
+            node.sim.mj_data.xfrc_applied[:] = link.xfrc()  # so does the mouse drag (Ctrl+right-drag)
         node.tick()
+        node.note_tick()
+        frame += 1
+        text = node.overlay() if (viewer or link) and frame % 5 == 0 else None  # 10 Hz is plenty for text
         if viewer is not None:
             viewer.cam.lookat[:] = node.sim.mj_data.qpos[0:3]
+            if text is not None:
+                viewer.set_texts((None, mujoco.mjtGridPos.mjGRID_TOPLEFT, *text))
             viewer.sync()
+        if link is not None:
+            link.sync(node.sim.mj_data.qpos, *(text or (None,)))
         next_t += period
         delay = next_t - time.monotonic()
         if delay > 0:
@@ -275,18 +356,36 @@ def _run_realtime(node: SimBridge, viewer) -> None:
             next_t = time.monotonic()
 
 
+def _pick_camera_gl() -> None:
+    """Choose Mesa's software rasteriser for the head camera on WSL, where the GPU path is slower.
+
+    The camera frame is small (544x448); WSL's D3D12 driver stalls ~25 ms per frame reading it back, ~5x slower
+    than llvmpipe. SIM_CAMERA_GL=software forces llvmpipe on any Linux (e.g. when EGL finds no usable GPU),
+    SIM_CAMERA_GL=gpu keeps whatever driver the system picks. Default "auto" is software on WSL only.
+    """
+    if not sys.platform.startswith("linux") or os.environ.get("MUJOCO_GL") != "egl":
+        return
+    mode = os.environ.get("SIM_CAMERA_GL", "auto")
+    on_wsl = "microsoft" in open("/proc/version").read().lower() if os.path.exists("/proc/version") else False
+    if mode == "software" or (mode == "auto" and on_wsl):
+        os.environ["GALLIUM_DRIVER"] = "llvmpipe"
+
+
 def main(argv=None) -> None:
     argv = sys.argv if argv is None else argv
     use_viewer = "--viewer" in argv
+    viewer_env = dict(os.environ)  # the viewer keeps the desktop's GL driver; only the camera is switched
+    _pick_camera_gl()
     rclpy.init(args=[a for a in argv if a != "--viewer"])
     node = SimBridge()
     executor = SingleThreadedExecutor()
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     node.sim.start()
+    link = None
     try:
-        if use_viewer:
-            import mujoco.viewer  # needs mjpython on macOS
+        if use_viewer and sys.platform == "darwin":
+            import mujoco.viewer  # needs mjpython on macOS, which drives the viewer from this process
 
             with mujoco.viewer.launch_passive(
                 node.sim.mj_model, node.sim.mj_data, show_left_ui=False, show_right_ui=True
@@ -295,11 +394,18 @@ def main(argv=None) -> None:
                     # Hide the robot motors so the top-right Control panel shows only the shot sliders.
                     viewer.opt.actuatorgroup[ROBOT_ACTUATOR_GROUP] = 0
                 _run_realtime(node, viewer)
+        elif use_viewer:
+            link = ViewerLink(
+                node.sim.mj_model, node.sim.n_robot_ctrl, node.sim.mj_data.ctrl[node.sim.n_robot_ctrl:], env=viewer_env
+            )
+            _run_realtime(node, None, link)
         else:
             _run_realtime(node, None)
     except KeyboardInterrupt:
         pass
     finally:
+        if link is not None:
+            link.close()
         executor.shutdown()
         node.destroy_node()
         if rclpy.ok():

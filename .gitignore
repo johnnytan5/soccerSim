@@ -15,3 +15,4 @@ ros_ws/src/robotedge
 MUJOCO_LOG.TXT
 *.log
 *.log.*
+.launcher/

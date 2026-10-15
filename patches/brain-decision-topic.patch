@@ -1,0 +1,20 @@
+--- a/src/brain.cpp
++++ b/src/brain.cpp
+@@ -9037,6 +9037,17 @@
+ }
+ 
+ void Brain::speakStateAndDecision() {
++    // soccerSim: observer-only topic with every decision change, for the simulator's viewer overlay.
++    static auto pubDecision = create_publisher<std_msgs::msg::String>("/brain/decision", 10);
++    static string lastPublishedDecision;
++    const string currentDecision = tree->getEntry<string>("decision");
++    if (currentDecision != lastPublishedDecision) {
++        std_msgs::msg::String decisionMsg;
++        decisionMsg.data = currentDecision;
++        pubDecision->publish(decisionMsg);
++        lastPublishedDecision = currentDecision;
++    }
++
+     if (!config->soundEnable || config->soundPack != "espeak") return;
+ 
+     // Game-state transitions.
