@@ -115,6 +115,42 @@ def detect_goalposts(cam, robot, posts, height, radius, max_range, noise_std=0.0
     return out
 
 
+ROBOT_HEIGHT_M = 1.15  # T2 standing height
+ROBOT_HALF_WIDTH_M = 0.25
+
+
+def detect_robots(cam, robot, others_xy, max_range, noise_std=0.0, rng=None) -> list[Detection]:
+    """Other robots as brain's 'Opponent' objects: the real model cannot tell teammates from opponents either.
+
+    others_xy are positions in the same frame as `cam` and `robot`; the robot itself is not in the list.
+    """
+    out = []
+    for ox, oy in others_xy:
+        if not _in_range(robot, ox, oy, max_range):
+            continue
+        feet = cam.to_cam((ox, oy, 0.0))
+        head = cam.to_cam((ox, oy, ROBOT_HEIGHT_M))
+        depth = float(max(feet[2], head[2]))
+        if depth <= MIN_DEPTH_M or min(feet[2], head[2]) <= MIN_DEPTH_M:
+            continue
+        u = cam.fx * feet[0] / feet[2] + cam.cx
+        if not 0.0 <= u < cam.cfg.width:
+            continue
+        v_feet = cam.fy * feet[1] / feet[2] + cam.cy
+        v_head = cam.fy * head[1] / head[2] + cam.cy
+        if max(v_feet, v_head) < 0.0 or min(v_feet, v_head) >= cam.cfg.height:
+            continue
+        out.append(
+            Detection(
+                "Opponent",
+                CONFIDENCE,
+                _bbox(cam, u, min(v_head, v_feet), max(v_head, v_feet), cam.fx * ROBOT_HALF_WIDTH_M / feet[2]),
+                _robot_xy(robot, ox, oy, noise_std, rng),
+            )
+        )
+    return out
+
+
 def detect_markings(cam, robot, markings, max_range, noise_std=0.0, rng=None) -> list[Detection]:
     out = []
     for label, mx, my in markings:
@@ -137,28 +173,50 @@ def detect_markings(cam, robot, markings, max_range, noise_std=0.0, rng=None) ->
     return out
 
 
-def visible_lines(cam, robot, segments: list[Segment], max_range: float, step: float = 0.05) -> list[LineObs]:
-    """Sample each segment; every contiguous visible run becomes one observed segment."""
-    out = []
-    for (x0, y0), (x1, y1) in segments:
+_LINE_SAMPLES: dict[int, tuple] = {}
+
+
+def _line_samples(segments: list[Segment], step: float):
+    """Sample points along every segment, once per segment list: (points (N, 2), segment index of each point)."""
+    cached = _LINE_SAMPLES.get(id(segments))
+    if cached is not None and cached[0] is segments and cached[1] == step:
+        return cached[2], cached[3]
+    pts, seg = [], []
+    for k, ((x0, y0), (x1, y1)) in enumerate(segments):
         n = max(2, int(math.hypot(x1 - x0, y1 - y0) / step) + 1)
-        run: list[tuple[float, float, float, float]] = []
+        t = np.arange(n) / (n - 1)
+        pts.append(np.column_stack([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]))
+        seg.append(np.full(n, k))
+    points, owner = np.concatenate(pts), np.concatenate(seg)
+    _LINE_SAMPLES[id(segments)] = (segments, step, points, owner)
+    return points, owner
 
-        def flush():
-            if len(run) >= 2:
-                (ax, ay, au, av), (bx, by, bu, bv) = run[0], run[-1]
-                pa = world_to_robot_2d(ax, ay, robot.x, robot.y, robot.yaw)
-                pb = world_to_robot_2d(bx, by, robot.x, robot.y, robot.yaw)
-                out.append(LineObs((pa[0], pa[1], pb[0], pb[1]), (au, av, bu, bv)))
-            run.clear()
 
-        for i in range(n):
-            t = i / (n - 1)
-            px, py = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
-            p = cam.project((px, py, 0.0)) if _in_range(robot, px, py, max_range) else None
-            if p is None:
-                flush()
-            else:
-                run.append((px, py, p[0], p[1]))
-        flush()
+def visible_lines(cam, robot, segments: list[Segment], max_range: float, step: float = 0.05) -> list[LineObs]:
+    """Sample each segment; every contiguous visible run becomes one observed segment (vectorised: this runs
+    for every robot of a match several times a second)."""
+    pts, owner = _line_samples(segments, step)
+    n = len(pts)
+    d = (np.column_stack([pts, np.zeros(n)]) - cam.pos) @ cam.rot  # camera.rot.T @ (p - pos), for every sample
+    z = d[:, 2]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        u = cam.fx * d[:, 0] / z + cam.cx
+        v = cam.fy * d[:, 1] / z + cam.cy
+    ok = (
+        (np.hypot(pts[:, 0] - robot.x, pts[:, 1] - robot.y) <= max_range)
+        & (z > MIN_DEPTH_M) & (u >= 0.0) & (u < cam.cfg.width) & (v >= 0.0) & (v < cam.cfg.height)
+    )
+    same_prev = np.r_[False, owner[1:] == owner[:-1]]
+    same_next = np.r_[owner[:-1] == owner[1:], False]
+    starts = np.flatnonzero(ok & ~(np.r_[False, ok[:-1]] & same_prev))
+    ends = np.flatnonzero(ok & ~(np.r_[ok[1:], False] & same_next))
+    c, s = math.cos(robot.yaw), math.sin(robot.yaw)
+    out = []
+    for a, b in zip(starts, ends):
+        if b <= a:
+            continue
+        (ax, ay), (bx, by) = pts[a], pts[b]
+        pa = (c * (ax - robot.x) + s * (ay - robot.y), -s * (ax - robot.x) + c * (ay - robot.y))
+        pb = (c * (bx - robot.x) + s * (by - robot.y), -s * (bx - robot.x) + c * (by - robot.y))
+        out.append(LineObs((pa[0], pa[1], pb[0], pb[1]), (float(u[a]), float(v[a]), float(u[b]), float(v[b]))))
     return out

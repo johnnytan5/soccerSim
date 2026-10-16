@@ -121,3 +121,50 @@ def test_all_outputs_finite():
         assert all(math.isfinite(v) for v in (*d.bbox, *d.pos_robot))
     for line in lines:
         assert all(math.isfinite(v) for v in (*line.robot, *line.uv))
+
+
+def _reference_visible_lines(cam, robot, segments, max_range, step=0.05):
+    """The original point-by-point version, kept to prove the vectorised one matches."""
+    from soccer_sim.perception import LineObs, _in_range
+    out = []
+    for (x0, y0), (x1, y1) in segments:
+        n = max(2, int(math.hypot(x1 - x0, y1 - y0) / step) + 1)
+        run = []
+
+        def flush():
+            if len(run) >= 2:
+                (ax, ay, au, av), (bx, by, bu, bv) = run[0], run[-1]
+                pa = world_to_robot_2d(ax, ay, robot.x, robot.y, robot.yaw)
+                pb = world_to_robot_2d(bx, by, robot.x, robot.y, robot.yaw)
+                out.append(LineObs((pa[0], pa[1], pb[0], pb[1]), (au, av, bu, bv)))
+            run.clear()
+
+        for i in range(n):
+            t = i / (n - 1)
+            px, py = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+            p = cam.project((px, py, 0.0)) if _in_range(robot, px, py, max_range) else None
+            if p is None:
+                flush()
+            else:
+                run.append((px, py, p[0], p[1]))
+        flush()
+    return out
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_vectorised_lines_match_the_point_by_point_version(seed):
+    from soccer_sim.field import field_lines
+    from soccer_sim.config import FieldDims
+    rng = np.random.default_rng(seed)
+    segs = field_lines(FieldDims())
+    x, y, yaw = rng.uniform(-9, 9), rng.uniform(-6, 6), rng.uniform(-math.pi, math.pi)
+    pitch = rng.uniform(0.2, 0.9)
+    forward = np.array([math.cos(yaw) * math.cos(pitch), math.sin(yaw) * math.cos(pitch), -math.sin(pitch)])
+    right = np.array([math.sin(yaw), -math.cos(yaw), 0.0])
+    down = np.cross(forward, right)
+    cam = Camera(CFG, np.array([x, y, 1.1]), np.column_stack([right, down, forward]))
+    robot = Pose2D(x, y, yaw)
+    a, b = visible_lines(cam, robot, segs, 5.0), _reference_visible_lines(cam, robot, segs, 5.0)
+    assert len(a) == len(b) and len(a) > 0
+    for p, q in zip(a, b):
+        assert p.robot == pytest.approx(q.robot, abs=1e-6) and p.uv == pytest.approx(q.uv, abs=1e-6)

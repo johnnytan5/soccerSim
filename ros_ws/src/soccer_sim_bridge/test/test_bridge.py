@@ -176,3 +176,57 @@ def test_scripted_shot_scores_and_reports_goal(h):
     h.ticks(60)  # 1.2 s of sim: 2 m to the line at 6 m/s
     assert any(m.data == "goal" for m in h.got["result"])
     assert h.bridge.status()["shots"]["goal"] == 1
+
+
+def _overlay(h):
+    left, right = h.bridge.overlay()
+    return dict(zip(left.split("\n"), right.split("\n")))
+
+
+def test_overlay_shows_brain_decision_and_walk_command(h):
+    h.bridge.on_decision(String(data="save"))
+    h.send(2001, json.dumps({"vx": 0.5, "vy": -0.25, "vyaw": 0.1}))  # kMove
+    h.ticks(5)
+    rows = _overlay(h)
+    assert rows["brain decision"] == "save"
+    assert rows["walk command"].startswith("vx +0.50  vy -0.25  yaw +0.10")
+    assert rows["robot mode"].startswith("soccer")
+    assert rows["ball speed"].endswith("m/s")
+
+
+def test_overlay_uses_speak_for_decisions_only_without_the_decision_topic(h):
+    h.bridge.on_speak(String(data="retreat"))
+    h.bridge.on_speak(String(data="game state PLAYING"))
+    rows = _overlay(h)
+    assert rows["brain decision"] == "retreat" and rows["brain said"] == "game state PLAYING"
+    h.bridge.on_decision(String(data="save"))
+    h.bridge.on_speak(String(data="find"))  # stale, rate-limited: ignored once /brain/decision is live
+    assert _overlay(h)["brain decision"] == "save"
+
+
+def test_overlay_reports_the_shot_tally(h):
+    h.bridge._status["shots"] = {"goal": 2, "no_goal": 1}
+    h.bridge._status["last_shot"] = "goal"
+    assert _overlay(h)["shots"] == "goal 2  /  no goal 1   last: goal"
+
+
+def test_status_reports_pose_ball_decision_and_rate(h):
+    h.ticks(3)
+    st = h.bridge.status()
+    assert set(st["robot"]) == {"x", "y", "yaw"} and set(st["ball"]) == {"x", "y"}
+    sx, sy, _ = h.bridge.sim.sim_cfg.spawn_xy_yaw
+    assert abs(st["robot"]["x"] - sx) < 0.5 and abs(st["robot"]["y"] - sy) < 0.5
+    assert "decision" in st and "hz" in st and st["state"]  # old keys are still there
+
+
+def test_controller_tab_places_the_robot_where_clicked_and_validates(h):
+    h.bridge.on_web_reset_robot({"x": -3.0, "y": 2.0, "yaw": 1.0})
+    h.ticks(1)
+    st = h.bridge.status()
+    assert abs(st["robot"]["x"] + 3.0) < 0.3 and abs(st["robot"]["y"] - 2.0) < 0.3
+    h.bridge.on_web_reset_robot({})  # unchanged behaviour: back to the keeper's home
+    h.ticks(1)
+    assert abs(h.bridge.status()["robot"]["x"] + 10.0) < 0.3
+    for bad in ({"x": 99, "y": 0}, {"x": 1}, {"x": float("nan"), "y": 0}):
+        with pytest.raises(ValueError):
+            h.bridge.on_web_reset_robot(bad)

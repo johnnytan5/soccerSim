@@ -13,10 +13,12 @@ PAGE_PATH = Path(__file__).with_name("controller.html")
 class ControlServer:
     def __init__(self, port: int, on_joystick: Callable[[dict], None], on_referee: Callable[[dict], None],
                  on_shoot: Callable[[dict], None], status: Callable[[], dict], host: str = "127.0.0.1",
-                 on_reset_robot: Callable[[dict], None] | None = None):
+                 on_reset_robot: Callable[[dict], None] | None = None,
+                 extra_routes: dict[str, Callable[[dict], None]] | None = None):
         routes = {"/api/joystick": on_joystick, "/api/referee": on_referee, "/api/shoot": on_shoot}
         if on_reset_robot is not None:
             routes["/api/reset_robot"] = on_reset_robot
+        routes.update(extra_routes or {})
         page = PAGE_PATH.read_bytes()
 
         class Handler(BaseHTTPRequestHandler):

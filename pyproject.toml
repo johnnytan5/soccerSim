@@ -8,10 +8,14 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 [tool.setuptools]
-packages = ["soccer_sim"]
+packages = ["soccer_sim", "soccer_launcher"]
+
+[tool.setuptools.package-data]
+soccer_launcher = ["web/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 # ROS's launch_testing pytest plugins use a hook signature newer pytest rejects; this project doesn't use them.
 addopts = "-p no:launch_testing -p no:launch_ros"
 markers = [

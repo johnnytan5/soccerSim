@@ -13,6 +13,7 @@ Segment = tuple[tuple[float, float], tuple[float, float]]
 OPTICAL_FROM_MUJOCO_CAM = np.diag([1.0, -1.0, -1.0])
 # Robot motors live in this actuator group; the viewer hides it so its Control panel shows only shot sliders.
 ROBOT_ACTUATOR_GROUP = 3
+ROBOT_VISUAL_GROUP = 1  # booster_assets T2 MJCF puts visual meshes in group 1 (collisions in 3, field/ball in 0)
 
 
 def map_markings(fd: FieldDims) -> list[tuple[str, float, float]]:
@@ -74,8 +75,51 @@ def _yaw_quat(yaw: float) -> list[float]:
     return [math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)]
 
 
-def build_world(cfg: SimConfig) -> mujoco.MjModel:
+def robot_prefixes(n_robots: int) -> list[str]:
+    """Name prefix of each robot in a match world: the first robot keeps the plain names."""
+    return [""] + [f"r{i}_" for i in range(1, n_robots)]
+
+
+def _add_robot_extras(spec: mujoco.MjSpec, cfg: SimConfig) -> None:
+    """Head camera and IMU sensors, added to one robot's spec (before it is attached, if it is a child)."""
+    cam_to_head = cfg.camera.cam_to_head_matrix()
+    cam_quat = np.zeros(4)
+    mujoco.mju_mat2Quat(cam_quat, (cam_to_head[:3, :3] @ OPTICAL_FROM_MUJOCO_CAM).reshape(9))
+    spec.body("head_pitch_link").add_camera(
+        name="head_rgb",
+        pos=cam_to_head[:3, 3].tolist(),
+        quat=cam_quat.tolist(),
+        fovy=math.degrees(2.0 * math.atan(cfg.camera.height / 2 / cfg.camera.fy)),
+    )
+
+    # The T2 MJCF already has an "imu" site at the trunk origin; add noise-free sensors on it.
+    spec.add_sensor(name="imu_gyro", type=mujoco.mjtSensor.mjSENS_GYRO, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="imu")
+    spec.add_sensor(
+        name="imu_acc", type=mujoco.mjtSensor.mjSENS_ACCELEROMETER, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="imu"
+    )
+
+
+def _strip_visual_meshes(spec: mujoco.MjSpec) -> None:
+    """Drop a robot's ~1 M-triangle visual meshes (geom group 1) and the mesh assets only they used.
+
+    The collision shapes stay, so bodies, joints, actuators and qpos are exactly as in the full model.
+    """
+    for geom in [g for g in spec.geoms if g.group == ROBOT_VISUAL_GROUP]:
+        spec.delete(geom)
+    used = {g.meshname for g in spec.geoms if g.meshname}
+    for mesh in [m for m in spec.meshes if m.name not in used]:
+        spec.delete(mesh)
+
+
+def build_world(cfg: SimConfig, n_robots: int = 1, strip_visual: bool = False) -> mujoco.MjModel:
+    """Field + ball + n robots. Robot 0 keeps the plain names; the others are attached with `robot_prefixes`.
+
+    strip_visual: the viewer's copy of a match world. Same bodies, joints and qpos layout, but without the robots'
+    visual meshes: the viewer copies the whole model on every sync, and ten robots are ~10 M triangles of it.
+    """
     spec = mujoco.MjSpec.from_file(robot_mjcf_path())
+    if strip_visual:
+        _strip_visual_meshes(spec)
     world = spec.worldbody
     rgb_role = int(mujoco.mjtTextureRole.mjTEXROLE_RGB)
 
@@ -148,23 +192,20 @@ def build_world(cfg: SimConfig) -> mujoco.MjModel:
         friction=[0.8, 0.02, 0.01],
     )
 
-    cam_to_head = cfg.camera.cam_to_head_matrix()
-    cam_quat = np.zeros(4)
-    mujoco.mju_mat2Quat(cam_quat, (cam_to_head[:3, :3] @ OPTICAL_FROM_MUJOCO_CAM).reshape(9))
-    spec.body("head_pitch_link").add_camera(
-        name="head_rgb",
-        pos=cam_to_head[:3, 3].tolist(),
-        quat=cam_quat.tolist(),
-        fovy=math.degrees(2.0 * math.atan(cfg.camera.height / 2 / cfg.camera.fy)),
-    )
+    _add_robot_extras(spec, cfg)
+    for i, prefix in enumerate(robot_prefixes(n_robots)[1:], start=1):
+        child = mujoco.MjSpec.from_file(robot_mjcf_path())
+        if strip_visual:
+            _strip_visual_meshes(child)
+        for geom in [g for g in child.geoms if g.name == "floor"]:
+            child.delete(geom)  # one pitch for everybody
+        for light in list(child.lights):
+            child.delete(light)
+        _add_robot_extras(child, cfg)
+        frame = world.add_frame(pos=[-6.0 + i, -7.5, 0.0])
+        spec.attach(child, prefix=prefix, frame=frame)
 
-    # The T2 MJCF already has an "imu" site at the trunk origin; add noise-free sensors on it.
-    spec.add_sensor(name="imu_gyro", type=mujoco.mjtSensor.mjSENS_GYRO, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="imu")
-    spec.add_sensor(
-        name="imu_acc", type=mujoco.mjtSensor.mjSENS_ACCELEROMETER, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="imu"
-    )
-
-    for act in spec.actuators:  # only the 31 robot motors exist at this point
+    for act in spec.actuators:  # only the robot motors (31 each) exist at this point
         act.group = ROBOT_ACTUATOR_GROUP
     for name, lo, hi, _default in SHOT_SLIDERS:
         # ponytail: zero-gain actuators used purely as viewer sliders; they never apply force.

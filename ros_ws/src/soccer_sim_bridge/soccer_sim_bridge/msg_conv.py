@@ -14,7 +14,9 @@ from vision_interface.msg import DetectedObject, Detections, LineSegments
 from soccer_sim.config import CameraCfg
 from soccer_sim.kick_model import KickRef
 from soccer_sim.perception import Detection, LineObs
+from soccer_sim.game_controller import Snapshot
 from soccer_sim.referee import RefereeSnapshot
+from soccer_sim.roster import GOALKEEPER_ID, MAX_PLAYERS, TEAM_NUMBERS, TEAMS, PlayerSpec
 
 CAMERA_FRAME = "head_camera"
 BASE_FRAME = "base"
@@ -120,6 +122,36 @@ def game_control(ref: RefereeSnapshot, team_id: int, opp_team_id: int, goalkeepe
     msg.teams[0].goalkeeper = goalkeeper_id
     msg.teams[1].team_number = opp_team_id
     msg.teams[1].goalkeeper = 1
+    return msg
+
+
+PENALTY_SUBSTITUTE = 13  # RoboCupGameControlData: a player who is not on the pitch
+
+
+def game_control_match(snap: Snapshot, roster: list[PlayerSpec], packet_number: int) -> GameControlData:
+    """The simulated GameController's whole state as brain reads it. Teams: [0] home, [1] away.
+
+    Players who are not in the roster are reported as substitutes, so brain does not count them as live
+    teammates or opponents (role switching, goalkeeper substitution).
+    """
+    msg = GameControlData()
+    msg.packet_number = packet_number % 256  # brain drops a packet that is not newer than the last one it saw
+    msg.players_per_team = MAX_PLAYERS
+    msg.state = snap.state
+    msg.set_play = snap.set_play
+    msg.kicking_team = TEAM_NUMBERS[snap.kicking_team]
+    msg.stopped = snap.stopped
+    msg.secondary_time = snap.secondary_time
+    msg.first_half = snap.first_half
+    msg.secs_remaining = max(-32768, min(32767, snap.secs_remaining))
+    for slot, team in enumerate(TEAMS):
+        info = msg.teams[slot]
+        info.team_number = TEAM_NUMBERS[team]
+        info.goalkeeper = GOALKEEPER_ID
+        info.score = snap.score.get(team, 0)
+        present = {p.player_id for p in roster if p.team == team}
+        for i in range(MAX_PLAYERS):
+            info.players[i].penalty = 0 if (i + 1) in present else PENALTY_SUBSTITUTE
     return msg
 
 

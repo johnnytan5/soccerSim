@@ -4,9 +4,11 @@ A desktop simulator for testing **Robotedge's soccer brain** (`brain_node` from
 [Robotedge-5v5-RCAP2026](https://github.com/Robotedge-UM/Robotedge-5v5-RCAP2026)) without a robot.
 
 It runs the team's real, unmodified `brain_node` against a simulated Booster T2 on a RoboCup field
-(MuJoCo, macOS). Brain gets the same ROS topics and RPCs it gets on the robot, so it can't tell the
+(MuJoCo; Linux/WSL2 or macOS). Brain gets the same ROS topics and RPCs it gets on the robot, so it can't tell the
 difference. You can try a behaviour-tree or strategy change on your laptop, fire shots at the keeper,
-run set plays and watch what the robot decides, all before taking it to the field.
+run set plays and watch what the robot decides, all before taking it to the field. It also plays **whole
+matches**: up to 5 robots a side, each with its own brain, under a simulated GameController
+(see [Play a match](#play-a-match)).
 
 | 6 m/s shot to the corner | 4 m/s shot from wide, to the near post |
 |---|---|
@@ -30,6 +32,9 @@ The physics is only as realistic as that needs.
 | Posts, field lines, markings | Ground truth projected through the camera | Perfect: no occlusion or false detections |
 | Localisation, odometry | Brain's own localisation runs on the simulated detections; odometry is ground truth from the spawn point | Brain's code, cleaner inputs |
 | Referee, gamepad | GameController messages and remote-controller state, sent from a browser tab | Same messages brain reads |
+| Match referee | Score, kickoff after goals, throw-in / goal-kick / corner, two halves, side swap (no penalties) | Same `GameControlData` brain reads, simplified rules |
+| Other robots | Teammates and opponents are real brains in the same world; brain gets them as `Opponent` detections | Ground-truth positions, no occlusion |
+| Teammate comms | Brain's own UDP channel between the brains of a team | The real code path, over your network interface |
 
 <img src="docs/media/head_camera.png" alt="Rendered head-camera frame: the field, a ball and the far goal" width="420">
 
@@ -55,49 +60,228 @@ power, or anything that depends on the vision model's exact numbers.
 ```
 
 The sim never modifies the Robotedge repo. `pixi run build-sim` copies `src/brain` into this repo,
-applies `patches/brain-clang.patch` and builds it. The patch is 8 lines that macOS clang needs and
-the robot's GCC doesn't; behaviour is unchanged. Brain runs with the Robotedge `config.yaml`, but
-with rerun logging and team UDP turned off.
+applies two small patches and builds it:
+
+- `patches/brain-clang.patch`: 8 lines that clang needs and the robot's GCC doesn't. Behaviour is unchanged.
+- `patches/brain-decision-topic.patch`: an observer-only publisher, `/brain/decision`, so the viewer
+  overlay can show every decision change. Optional: if it stops applying the build warns and the
+  overlay falls back to brain's rate-limited `/speak` announcements.
+
+Brain runs with the Robotedge `config.yaml`, but with rerun logging and team UDP turned off.
 
 ## Requirements
 
-- An Apple Silicon Mac. The pixi environment is `osx-arm64` only.
-- [pixi](https://pixi.sh): `curl -fsSL https://pixi.sh/install.sh | bash`. It installs ROS 2 Kilted,
-  MuJoCo, PyTorch and the compilers into this folder, so nothing else needs installing system-wide.
-- A clone of the Robotedge repo, by default at `~/Robotedge-5v5-RCAP2026`.
-- The Booster SDK release zip, `sdk_release.zip`. It's the same SDK the robot setup in the Robotedge
-  README installs; the build only uses its headers. The default location is
-  `~/Downloads/sdk_release.zip`. Ask a teammate if you don't have it.
+- Linux x86-64 (verified on Ubuntu 24.04 under WSL2) or an Apple Silicon Mac. Both are in the pixi
+  environment. Other architectures (Linux arm64) aren't covered.
+- `git curl rsync patch unzip` (e.g. `sudo apt install git curl rsync patch unzip`; `setup.sh`
+  tells you what is missing).
+- A clone of the Robotedge repo. It's found at `$ROBOTEDGE_ROOT`, else in a sibling folder named
+  `Robotedge-5v5-RCAP2026`, else at `~/Robotedge-5v5-RCAP2026`.
 
-If either one lives somewhere else, export its path before you build and run:
-
-```bash
-export ROBOTEDGE_ROOT=/path/to/Robotedge-5v5-RCAP2026
-export SDK_ZIP=/path/to/sdk_release.zip
-```
+Everything else is downloaded by the setup: [pixi](https://pixi.sh) itself, ROS 2 Kilted, MuJoCo,
+PyTorch and the compilers (into `.pixi/`, nothing system-wide), the Booster submodules, Booster's YOLOv8
+ball model, the Booster SDK headers (from Booster's public
+[booster_robotics_sdk](https://github.com/BoosterRobotics/booster_robotics_sdk) repo; set
+`SDK_ZIP=/path/to/sdk_release.zip` to use your own copy instead) and the rerun C++ SDK.
 
 ## Setup (once)
 
 ```bash
 git clone --recurse-submodules <this repo> soccerSim && cd soccerSim
-pixi install                # ROS 2, MuJoCo, Python deps (a few GB; takes a while)
-pixi run fetch-models       # Booster's YOLOv8 ball model (checksum-verified)
-pixi run build-sim          # copy and build brain from $ROBOTEDGE_ROOT, build the bridge
-pixi run test               # quick sanity check
+bash scripts/setup.sh
 ```
 
-The first `build-sim` also builds the rerun C++ SDK that brain links against, which takes several
-minutes. Later builds only rebuild brain.
+That installs the environment (a few GB), builds brain and the bridge, and runs the unit tests. The
+first build also compiles the rerun C++ SDK that brain links against, which takes several minutes.
+It is safe to re-run. The individual steps are `pixi install`, `pixi run fetch-models`,
+`pixi run build-sim` and `pixi run test`.
+
+If the Robotedge repo lives somewhere else, `export ROBOTEDGE_ROOT=/path/to/Robotedge-5v5-RCAP2026`
+before setup and before every run.
+
+### Linux notes
+
+- **The viewer runs in its own process on Linux**, fed the robot and ball poses by the sim. Rendering it inside
+  the sim process made the two fight for the CPU and dropped the sim to about 30 Hz. Now it holds the
+  50 Hz target with the viewer open. `--viewer` needs a display (X11 or Wayland). On WSL2, WSLg
+  provides one and `DISPLAY=:0` is set for you if your shell hasn't.
+- **The head camera renders offscreen through EGL**, so no display is needed without `--viewer`. On
+  WSL2 it uses Mesa's software rasteriser (llvmpipe): the camera frame is small, and WSL's D3D12 driver
+  stalls ~25 ms per frame reading it back, 5x slower than the CPU. The viewer window still uses your
+  GPU. `SIM_CAMERA_GL=software` forces llvmpipe on any Linux (e.g. if EGL finds no usable GPU) and
+  `SIM_CAMERA_GL=gpu` keeps the system driver. Export `MUJOCO_GL` to override the backend.
+
+## Control Centre (web launcher + controller)
+
+```bash
+pixi run launch               # serves http://127.0.0.1:8765/ and opens it
+pixi run launch --port 8800   # another port
+pixi run launch --last        # no UI: build if needed, then run the last saved config
+```
+
+One page to **launch and drive** the sim. Leave `pixi run launch` running; the page stays up between sim runs.
+
+![Launch tab](docs/media/launcher.png)
+
+**Launch tab.** Pick a preset or saved profile, or edit the form: role, player id, behaviour tree, quick vs
+full match, viewer, ball detector, spawn/ball positions, referee schedule, `SIM_VY_MAX`, GL backends,
+`ROS_DOMAIN_ID`, extra raw bridge/launch args. The side panel shows the rcap clone in use, the pre-flight
+checks (with a *Fix* button where there is one) and the exact command. *Tools* run `build-sim`, `build-ws`,
+`fetch-models`, the three test tasks and `scripts/setup.sh` with live output in the log drawer.
+
+**Control tab** (switches on by itself once the sim answers).
+
+![Control tab](docs/media/control_centre.png)
+
+- **Field map**: *Ball* tool, click to put the ball there. *Robot* tool, click to place the robot and drag to
+  set its heading. *Shot* tool, press at the start point (near the ball snaps to it), drag to aim, release to
+  fire; speed and elevation sliders. Live ball and robot markers. Field frame: our goal on the left, x towards
+  the opponent.
+- Everything the old controller page had: the two sticks and gamepad buttons (a connected gamepad is used
+  automatically), Stand up / Recalibrate / Auto combos, referee states and set plays, 6 ball spots and the
+  9 x 3 preset shots, reset buttons, and a rendered status panel (referee, robot mode, brain decision,
+  shot tally, pose, sim rate).
+
+How it works:
+
+- **rcap is built from whatever the clone has checked out**, found like `scripts/activate.sh` does
+  (`$ROBOTEDGE_ROOT`, the sibling `Robotedge-5v5-RCAP2026`, then `~/Robotedge-5v5-RCAP2026`, or the path
+  in *Advanced*). The launcher never fetches or checks out. It fingerprints `src/brain`, the message
+  packages and `patches/`, and runs the `build-sim` build only when that changed since the last
+  successful build (or turn on *Force rebuild*).
+- **Ports.** The launcher owns the port (8765). The sim's own controller server moves to an automatically
+  chosen internal port and the launcher proxies it, so the page is always same-origin. If a previous
+  launcher still holds the port, the new one stops it (and its sim) and takes over; if anything else holds
+  it, the launcher says so and exits without touching it.
+- **Saved state** is in `.launcher/state.json` (git-ignored): the last launched config, restored on the
+  next start, and your named profiles. Unsaved form edits survive a page reload.
+- The server only listens on 127.0.0.1, rejects foreign `Host`/`Origin` headers, and never uses a shell.
+- `pixi run keeper`, `keeper-quick` and `striker` still work on their own, with the bridge's simpler
+  controller page (below) on port 8765, when the launcher is not running.
+- **Match presets** (5v5, 5 robots with no opponents, goalie vs 1 or 2 strikers, goalies only, and a custom
+  roster) are described under [Play a match](#play-a-match).
+
+## Play a match
+
+Pick a preset under **Full match** in the Launch tab (or switch **Mode** to **Match** and build your own), then
+Launch. Every robot runs the team's real `brain_node`; a simulated GameController runs the game.
+
+![Match launch tab: presets, the Players card and the start spots](docs/media/match_launcher.png)
+
+![Match control tab: all robots on the map, score, clock and referee](docs/media/match_control.png)
+
+| Preset | Who plays |
+|---|---|
+| Team vs team (5v5) | Home 1-5 against away 1-5, two halves of 10 minutes |
+| 5 robots, no opponents | Home 1-5 alone on the pitch |
+| Goalie vs 1 striker / 2 strikers | Home keeper against away striker(s), continuous play |
+| Goalies only | Both keepers, continuous play |
+| Custom match | Whatever lineup you set in the **Players** card |
+
+**Players card.** Two columns, home and away, with five fixed slots each. Click an empty slot to add that
+player, pick Striker or Defender from the list, press ✕ to remove. Slot 1 is always the goalkeeper (brain makes
+player 1 the keeper whatever its role says), so a second keeper or a keeperless "player 1" cannot be built. Any
+other lineup works: 2 players and no opponents, 3 against 1, only defenders... *Fill 5* and *Clear* do a whole team.
+The small pitch under the card shows where everyone starts: on their own sideline, facing the pitch, like brain's
+`enter_field` expects. The away team is the same brain with team number 1, seeing the pitch rotated 180° (its own
+goal is also at its -x).
+
+**Match settings.**
+
+| Setting | Meaning |
+|---|---|
+| Start: Quick | Robots wait on the sideline; the referee runs INITIAL → READY → SET → PLAYING by itself |
+| Start: Full procedure | Robots boot in prepare mode and the sim replays the stand-up / recalibrate / auto combos for each of them; the referee then waits in INITIAL until you press READY in the Control tab |
+| Length | Two halves of N minutes (default 10, the real rules) with a side swap at half-time, or **Continuous**: no halves and no clock limit |
+| Ball detector | **Ground truth** (default for matches) or YOLO; see [How fast it runs](#how-fast-it-runs) |
+| ROS_DOMAIN_ID | The first robot's domain; robot *i* uses domain + *i* (default 70) |
+
+**The referee** (`soccer_sim/game_controller.py`) is a simplified GameController without penalties:
+
+- A goal needs the whole ball over the line, between the posts and under the bar. The team that conceded kicks
+  off: ball to the centre spot, READY (30 s to walk to position), SET, PLAYING.
+- A ball fully over a touchline is a **throw-in** for the team that did not touch it last; over a goal line it is a
+  **corner kick** (last touched by the defenders) or a **goal kick** (last touched by the attackers). The ball is placed
+  and the restart starts *stopped* for 4 s, then must be taken within 30 s (it ends when the ball moves 25 cm).
+- A team that is not on the pitch never gets a restart: with no opponents the home team kicks off again after its
+  own goal and takes the throw-ins and goal kicks.
+- Half-time: the teams change ends, every robot is put back on its sideline and its odometry restarts (like picking
+  it up), and the second half begins. After the second half the state is FINISHED.
+- `GameControlData` carries the score, `secs_remaining`, `first_half`, a rising `packet_number` (brain drops packets
+  that are not newer) and the absent players as substitutes.
+
+**Control tab in a match.** Every robot is on the field map, home blue and away orange, with its player number.
+Click a robot on the map, or its chip above the map, to **select** it: the sticks, *Robot* placement and *reset*
+apply to the selected robot, while the ball, shots and referee stay global. The status card shows the score, the
+clock and half, and the selected robot's brain decision. *Kickoff*, *Next half* and *Finish* sit under the referee
+states.
+
+**Teammates talk over UDP.** Brain's team channel (ball owner, role switching, set-play plans) is on, so the
+robots of a team find each other like on the real network: the brain derives a broadcast address from the route
+to its `game_control_ip`, which works on WSL2 and on a machine with any network connection (even without
+internet). Without a default route the launcher warns that teammates may not connect. The two teams use different
+UDP ports and never see each other.
+
+### How fast it runs
+
+One MuJoCo world steps every robot together. Each robot has its own ROS domain (brain's topics are global), a
+publish-only node in the sim process, and a small **gateway process** for its loco RPCs, kick reference and brain
+text: a brain sends ~300 RPCs a second, and handling 3000 a second for ten robots in the sim process pushed it
+well below 50 Hz. Measured on 16 cores under WSL2 with real brains (`pixi run bench-match` times the sim alone):
+
+| Robots | Sim step per tick | Result |
+|---|---|---|
+| 1 | 0.5 ms | 50 Hz, YOLO or ground truth |
+| 5 (one team) | 2.6 ms | 50 Hz |
+| 10 (5v5), ground-truth ball | 4.9 ms + 1.8 ms perception | **50.0 Hz** with 10 brains |
+| 2, YOLO | + one camera frame per 2 ticks | 50 Hz |
+
+A camera frame is ~8 ms of rendering plus ~10 ms of YOLO, so with YOLO the sim renders about **25 frames a second in
+total** (12.5 with more than 5 robots), shared round-robin: each robot's camera updates 25 / N times a second.
+That is why matches default to ground truth, and the launcher warns when you pick YOLO with several robots. In
+either mode all robot bodies are hidden from the ball-detector camera (YOLO takes the chrome chest for a ball);
+other robots reach brain as ground-truth `Opponent` detections instead.
+
+### The viewer window
+
+The MuJoCo window is drawn by **your graphics card** by default. The sim's head camera uses software GL on WSL
+(a GPU read-back stalls it), but the viewer is its own process and keeps the desktop driver. In the launcher,
+**Viewer graphics: GPU / CPU** switches it (`SIM_VIEWER_GL=cpu`); CPU is Mesa software rendering on Linux, which burns
+about six cores for ten robots, and macOS always uses the system's graphics whatever you pick.
+
+A match viewer shows **simple bodies**: home blue and away orange (the colours of the Control tab), no shadows, and a
+model without the robots' visual meshes. One T2's meshes are ~990,000 triangles, and the viewer copies the whole model on
+every sync, so ten robots made each sync 64 ms (12 frames a second, trailing the minimap) and 6.6 GB. The stripped model
+takes 0.1 ms (58 frames a second) and 0.7 GB; the physics model and the head cameras are untouched. Turn on **Detailed
+robot bodies** (`--detailed-bodies`) for the real meshes, with the light-grey parts tinted by team, and accept the lag.
+A lone robot's viewer is unchanged.
+
+`--profile SECS` on the match bridge (`extra_bridge_args` in *Advanced*) prints where the main loop spends its time.
 
 ## Run
 
 ```bash
-pixi run bash scripts/run_sim.sh --viewer role:=goal_keeper                    # keeper
-pixi run bash scripts/run_sim.sh --viewer --quick role:=striker player_id:=2   # striker, fast start
+pixi run keeper-quick     # goalkeeper, skips the match procedure
+pixi run keeper           # goalkeeper, full match procedure
+pixi run striker          # striker (player 2), skips the match procedure
 ```
 
+These are shortcuts for `pixi run bash scripts/run_sim.sh --viewer [--quick] role:=...`.
 Then open the controller tab at **http://127.0.0.1:8765/**. Leave out `--viewer` to run without the
-MuJoCo window, which is faster.
+MuJoCo window.
+
+The text along the top of the viewer is brain's live state:
+
+| Row | Shows |
+|---|---|
+| brain decision | `find`, `retreat`, `save`, `chase`, ... as brain's behaviour tree decides it |
+| walk command | the velocity brain asks the robot for (`vx`, `vy`, `yaw`), `[manual]` while the gamepad drives |
+| ball speed | in m/s |
+| robot mode | `soccer`, `prepare`, ... and `(kicking)` during a visual kick |
+| referee | game state, set play and who kicks |
+| brain said | brain's last spoken announcement (`game state PLAYING`, `camera lost`, ...) |
+| shots | goal / no-goal tally and the last result |
+| sim rate | achieved tick rate against the 50 Hz target |
 
 - **By default the sim follows the real match procedure.** The robot boots in prepare mode at the
   sideline. In the controller tab, press **Stand up (LT+Up)**, **Recalibrate (LT+A)**, then
@@ -162,6 +346,8 @@ fails until `CameraCfg` in `soccer_sim/config.py` is updated to match.
 | Lateral walk speed limit | `SIM_VY_MAX=1.2` | 0.8 m/s |
 | Noise on posts and lines | `detection_noise_std` in `SimConfig` (`soccer_sim/config.py`) | 0 |
 | Kick strength and shape | `KickParams` in `soccer_sim/kick_model.py` | — |
+| Viewer graphics | **Viewer graphics** in the launcher, or `SIM_VIEWER_GL=cpu` | GPU |
+| Match bridge options (half length, READY time, ball detector, ...) | `MATCH_ARGS='--half-minutes 5 --ready-secs 20'`, see `python -m soccer_sim_bridge.match_node --help` | 10 min halves, 30 s READY |
 
 Put environment variables in front of the run command, for example
 `SIM_VY_MAX=1.2 pixi run bash scripts/run_sim.sh --viewer role:=goal_keeper`.
@@ -176,15 +362,29 @@ pixi run test-ros    # bridge tests: needs build-sim, and no other sim on the sa
 
 ## Known limitations
 
-- **With the viewer open, the sim runs slower than real time.** On an M-series Mac it can drop to
-  about half speed, but brain uses the wall clock, so the ball looks slower to brain than the shot
-  you fired. Run without `--viewer` when timing matters.
+- **The sim is only real time if the machine keeps up.** Brain uses the wall clock, so a sim below
+  50 Hz makes the ball look slower to brain than the shot you fired. On Linux/WSL2 it holds 50 Hz with
+  the viewer open. On a Mac the viewer shares the sim's process and can slow it to about half speed;
+  run without `--viewer` when timing matters.
+- If the sim logs `sim ticking at N Hz (target 50)`, something else is using the CPU. The overlay's
+  sim rate shows the same number.
+- On Linux the viewer is a separate process that replays the sim's state. The shot sliders and
+  Ctrl+right-drag on the robot or ball are passed back to the sim, but the viewer's Backspace reset and
+  the physics options in its right panel only change the viewer's own copy.
 - The kick is an approximation (`soccer_sim/kick_model.py`), not Booster's policy.
 - The ball is detected by Booster's public sim-trained YOLOv8, not the team's own model, which only
   runs on the Jetson with TensorRT.
 - Goalposts, markings and lines come from ground truth unless you add noise.
-- There's only one robot. There are no teammates or opponents (shots come from the launcher), and
-  team UDP is off.
+- A match has no penalties (pushing, leaving the field, illegal positioning, fallen robots), no substitutions, no
+  timeouts and no penalty shoot-out. Robots collide physically but nobody is whistled for it.
+- Restarts are simplified: the ball is placed, the restart is *stopped* for 4 s and counts as taken once it has
+  moved 25 cm. Last touch is "the robot nearest the ball within 45 cm".
+- Other robots are ground-truth `Opponent` detections (teammates too, the real model cannot tell either): no
+  occlusion, no false positives, and they do not show up in the depth image.
+- At half-time robots are teleported to their sideline, as if picked up and put down.
+- With YOLO, several robots share the camera budget (see [How fast it runs](#how-fast-it-runs)). The manual full
+  match procedure (stand up each robot yourself) is single-robot only; a match's *Full procedure* does it for all.
+- Teammate comms use the real UDP broadcast, so the machine needs a network route (any interface).
 - Ball rolling friction and the kick's power-to-speed mapping are guesses, not calibrated values.
 - Camera frames render without shadows or reflections, to keep the sim fast.
 

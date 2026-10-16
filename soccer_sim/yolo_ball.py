@@ -74,7 +74,12 @@ def ground_point_at_height(cam: Camera, u: float, v: float, z: float) -> np.ndar
 
 class YoloBallDetector:
     def __init__(self, model_path: str, conf_thresh: float = 0.4, nms_iou: float = 0.4):
-        self.session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        # ORT defaults to one spinning thread per core, which starves the sim, brain and renderer on a busy desktop.
+        opts = ort.SessionOptions()
+        opts.intra_op_num_threads = 4
+        opts.inter_op_num_threads = 1
+        opts.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        self.session = ort.InferenceSession(model_path, sess_options=opts, providers=["CPUExecutionProvider"])
         names = self.session.get_modelmeta().custom_metadata_map.get("names", "")
         if "'Ball'" not in names.split(",")[0]:
             raise ValueError(f"{model_path}: class 0 is not 'Ball' (names={names})")
