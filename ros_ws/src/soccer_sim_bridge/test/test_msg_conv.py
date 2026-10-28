@@ -93,3 +93,15 @@ def test_joystick_from_dict_clamps_axes_and_sets_hat_centre():
 def test_joystick_from_dict_rejects_non_bool_buttons(bad):
     with pytest.raises(ValueError):
         msg_conv.joystick_from_dict(bad)
+
+
+def test_game_control_match_reports_each_teams_remaining_packet_budget():
+    from soccer_sim.game_controller import Snapshot
+    from soccer_sim.roster import PlayerSpec
+
+    snap = Snapshot(3, 0, "home", False, 0, True, 600, {"home": 1, "away": 0})
+    roster = [PlayerSpec("home", 1, "goal_keeper"), PlayerSpec("away", 1, "goal_keeper")]
+    msg = msg_conv.game_control_match(snap, roster, 1, {"home": 59000, "away": 0})
+    assert (msg.teams[0].message_budget, msg.teams[1].message_budget) == (59000, 0)
+    assert msg_conv.game_control_match(snap, roster, 1, {"home": 10 ** 6}).teams[0].message_budget == 65535
+    assert msg_conv.game_control_match(snap, roster, 1).teams[0].message_budget == 0

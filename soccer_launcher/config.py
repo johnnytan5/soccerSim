@@ -17,6 +17,7 @@ MATCH_MODES = ("quick", "full")
 GOALKEEPER_ID = 1  # brain forces this player id to be the keeper whatever `role` says
 DEFAULT_DOMAIN_BASE = 70  # match runs use one ROS domain per robot, counting up from here
 MAX_ROBOTS = 10
+MAX_PACKET_BUDGET = 65535  # the GameController's TeamInfo.message_budget is a uint16
 
 _SCHEDULE_RE = re.compile(r"^\d:\d+(\.\d+)?(,\d:\d+(\.\d+)?)*$")
 
@@ -35,6 +36,7 @@ class LaunchConfig:
     half_minutes: float = 10.0
     continuous: bool = False  # no halves or clock limit
     detailed_bodies: bool = False  # viewer: real T2 meshes instead of simple team-coloured bodies (slow with many robots)
+    packet_budget: int = 60000  # UDP packets each team may send per match, as in RCAP (0 = no limit); over it the score is zeroed
     # Perception
     ball_detector: str = "yolo"
     # Field & referee (empty/None = bridge default)
@@ -106,6 +108,8 @@ class LaunchConfig:
             errs.append(f"at most {MAX_ROBOTS} robots")
         if not (self.continuous or (math.isfinite(self.half_minutes) and 0.1 <= self.half_minutes <= 60)):
             errs.append("half length must be 0.1-60 minutes")
+        if not 0 <= self.packet_budget <= MAX_PACKET_BUDGET:
+            errs.append(f"packet budget must be 0-{MAX_PACKET_BUDGET} (0 = no limit)")
         base = self.ros_domain_id if self.ros_domain_id is not None else DEFAULT_DOMAIN_BASE
         if base + len(self.players) - 1 > 232:
             errs.append(f"each robot needs its own ROS domain: {base} + {len(self.players)} robots goes past 232")

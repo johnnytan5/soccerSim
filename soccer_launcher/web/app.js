@@ -39,7 +39,7 @@ async function api(path, body) {
 const DEFAULTS = {role: "goal_keeper", player_id: 1, tree: "game.xml", match_mode: "quick", viewer: true, ball_detector: "yolo",
   spawn_x: null, spawn_y: null, spawn_yaw: null, ball_x: null, ball_y: null, referee_schedule: "", rcap_root: "",
   sim_vy_max: null, camera_gl: "auto", mujoco_gl: "", ros_domain_id: null, extra_bridge_args: "", extra_launch_args: "",
-  players: [], half_minutes: 10, continuous: false, detailed_bodies: false, graphics: "gpu"};
+  players: [], half_minutes: 10, continuous: false, detailed_bodies: false, graphics: "gpu", packet_budget: 60000};
 const S = {
   cfg: {...DEFAULTS}, parseErrors: {}, srv: null, static: null, check: null, checkSeq: 0, checkTimer: null,
   ready: false, status: {}, lastShot: "", cur: "", autoSwitched: false, lastState: "idle", sel: 0, lastRoster: null,
@@ -69,6 +69,9 @@ const FIELDS = [
     {k: "_length", label: "Length", type: "length", show: isMatch, help: c => c.continuous
       ? "No halves and no clock limit: play on until you press Finish."
       : `Two halves of ${c.half_minutes} min with a side swap at half-time (real rules: 10).`},
+    {k: "packet_budget", label: "Packet budget per team", type: "num", int: true, ph: "60000", show: isMatch, help: c => c.packet_budget === 0
+      ? "No limit: each team's UDP packets are still counted and shown."
+      : `UDP packets each team may send in the whole match (RCAP: 60000, discovery and state both count). Over it the team's score is zeroed. Blank = 60000, 0 = no limit.`},
     {k: "viewer", label: "MuJoCo viewer window", type: "switch", help: () => "Needs a display (WSLg works)."},
     {k: "graphics", label: "Viewer graphics", type: "seg", opts: [["gpu", "GPU"], ["cpu", "CPU"]], show: c => c.viewer, help: c => c.graphics === "cpu"
       ? "Software rendering on the CPU (Mesa llvmpipe). Slow with many robots; only for when the GPU driver misbehaves. macOS ignores this."
@@ -807,6 +810,14 @@ function renderStatus() {
     rows.push(["Score", [h("span", {class: "score"}, h("span", {class: "home", text: `Home ${(s.score || {}).home ?? 0}`}), " – ", h("span", {class: "away", text: `${(s.score || {}).away ?? 0} Away`}))]],
       ["Clock", [tag(s.continuous ? `${fmtClock(s.play_secs)} played` : fmtClock(s.secs_remaining) + " left"), s.continuous ? null : tag(`half ${s.first_half ? 1 : 2}`),
         s.awaiting_start ? tag("press READY to start", "warn") : null]]);
+  }
+  if (match && s.packets) {
+    rows.push(["Packets", ["home", "away"].filter(t => s.packets[t]).map(t => {
+      const p = s.packets[t], name = t[0].toUpperCase() + t.slice(1);
+      if (!p.counting) return tag(`${name} n/a`, "warn");
+      const text = `${name} ${p.used}${p.limit ? ` / ${p.limit}` : ""}`;
+      return p.over ? tag(`${text} · over, score 0`, "bad") : tag(text, p.limit && p.used > 0.8 * p.limit ? "warn" : "");
+    })]);
   }
   rows.push(
     ["Referee", [tag(s.state || "–", stKind), s.set_play && s.set_play !== "NONE" ? tag(s.set_play.replace("_", " "), "warn") : null,
