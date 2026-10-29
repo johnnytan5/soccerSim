@@ -36,7 +36,7 @@ async function api(path, body) {
 }
 
 /* ------------------------------------------------------------------ state */
-const DEFAULTS = {role: "goal_keeper", player_id: 1, tree: "game.xml", match_mode: "quick", viewer: true, ball_detector: "yolo",
+const DEFAULTS = {role: "goal_keeper", player_id: 1, tree: "game.xml", match_mode: "quick", simulator: "mujoco", settings: {}, viewer: true, ball_detector: "yolo",
   spawn_x: null, spawn_y: null, spawn_yaw: null, ball_x: null, ball_y: null, referee_schedule: "", rcap_root: "",
   sim_vy_max: null, camera_gl: "auto", mujoco_gl: "", ros_domain_id: null, extra_bridge_args: "", extra_launch_args: "",
   players: [], half_minutes: 10, continuous: false, detailed_bodies: false, graphics: "gpu", packet_budget: 60000};
@@ -46,6 +46,9 @@ const S = {
 };
 const ACTIVE = new Set(["building", "starting", "running", "tool", "stopping"]);
 const controls = {};
+// What worldmodel.js / settings.js (loaded after this file) hook into. Callbacks are optional and set by those scripts.
+const ui = window.SoccerUI = {S, $, $$, h, svgEl: null, fmt, clamp, toast, api, hooks: {}, edited: () => {}, isMatch: c => (c.players || []).length > 0};
+const hook = (name, ...args) => { try { if (ui.hooks[name]) ui.hooks[name](...args); } catch (e) { console.error("hook", name, e); } };
 
 /* ------------------------------------------------------------ form schema */
 const isMatch = c => (c.players || []).length > 0;
@@ -62,6 +65,11 @@ const FIELDS = [
     {k: "player_id", label: "Player id", type: "select", opts: [1, 2, 3, 4, 5], num: true},
   ]},
   {group: "Match", items: [
+    {k: "simulator", label: "Simulator", type: "seg", opts: [["2d", "2D (browser)"], ["mujoco", "MuJoCo 3D"]],
+      optOff: (c, v) => v === "2d" && !isMatch(c) ? "The 2D simulator runs matches: switch to Match mode first" : "",
+      help: c => c.simulator === "2d"
+        ? "Real brains on a lightweight kinematic simulator, shown on the Control tab's map: no MuJoCo, no viewer window, ground-truth perception, real time. Drag robots on the map and drive them with the sticks."
+        : "MuJoCo physics (the walk policy, falls and kicks as simulated by MuJoCo) with an optional 3D viewer window."},
     {k: "tree", label: "Behaviour tree", type: "select", opts: ["game.xml", "chase.xml", "demo.xml"]},
     {k: "match_mode", label: "Start", type: "seg", opts: [["quick", "Quick"], ["full", "Full procedure"]], help: c => isMatch(c)
       ? "Quick: robots wait on the sideline and the referee runs INITIAL→READY→SET→PLAYING by itself. Full: robots stand up and calibrate on their own, then you press READY in the Control tab."
@@ -72,17 +80,19 @@ const FIELDS = [
     {k: "packet_budget", label: "Packet budget per team", type: "num", int: true, ph: "60000", show: isMatch, help: c => c.packet_budget === 0
       ? "No limit: each team's UDP packets are still counted and shown."
       : `UDP packets each team may send in the whole match (RCAP: 60000, discovery and state both count). Over it the team's score is zeroed. Blank = 60000, 0 = no limit.`},
-    {k: "viewer", label: "MuJoCo viewer window", type: "switch", help: () => "Needs a display (WSLg works)."},
-    {k: "graphics", label: "Viewer graphics", type: "seg", opts: [["gpu", "GPU"], ["cpu", "CPU"]], show: c => c.viewer, help: c => c.graphics === "cpu"
+    {k: "viewer", label: "MuJoCo viewer window", type: "switch", show: c => c.simulator !== "2d", help: () => "Needs a display (WSLg works)."},
+    {k: "graphics", label: "Viewer graphics", type: "seg", opts: [["gpu", "GPU"], ["cpu", "CPU"]], show: c => c.simulator !== "2d" && c.viewer, help: c => c.graphics === "cpu"
       ? "Software rendering on the CPU (Mesa llvmpipe). Slow with many robots; only for when the GPU driver misbehaves. macOS ignores this."
       : "The viewer window is drawn by your graphics card (the default). macOS always uses the system's graphics."},
-    {k: "detailed_bodies", label: "Detailed robot bodies", type: "switch", show: c => isMatch(c) && c.viewer, help: c => c.detailed_bodies
+    {k: "detailed_bodies", label: "Detailed robot bodies", type: "switch", show: c => isMatch(c) && c.simulator !== "2d" && c.viewer, help: c => c.detailed_bodies
       ? `Real T2 meshes, about 1 million triangles each${robotCount(c) > 2 ? `: ${robotCount(c)} robots will make the viewer lag` : ""}. Light parts are tinted by team.`
       : "Off: simple bodies, home blue and away orange, no shadows. Keeps the viewer smooth with many robots."},
   ]},
   {group: "Perception", items: [
-    {k: "ball_detector", label: "Ball detector", type: "seg", opts: [["yolo", "YOLO"], ["ground_truth", "Ground truth"]], help: c =>
-      c.ball_detector === "yolo" && robotCount(c) > 1
+    {k: "ball_detector", label: "Ball detector", type: "seg", opts: [["yolo", "YOLO"], ["ground_truth", "Ground truth"]],
+      optOff: (c, v) => v === "yolo" && c.simulator === "2d" ? "The 2D simulator renders no camera" : "", help: c =>
+      c.simulator === "2d" ? "The 2D simulator reports ground-truth detections (with the noise set under Simulation realism)."
+      : c.ball_detector === "yolo" && robotCount(c) > 1
         ? `▲ YOLO shares about ${robotCount(c) <= 5 ? 25 : 12.5} camera frames a second between all robots (${((robotCount(c) <= 5 ? 25 : 12.5) / robotCount(c)).toFixed(1)} each). Ground truth gives every robot full-rate perception.`
         : "Ground truth gives the brain a perfect ball: debug behaviour, not vision."},
   ]},
@@ -119,6 +129,11 @@ function setPlayers(list) {
 }
 function setMode(match) {
   if (match === isMatch(S.cfg)) return;
+  if (!match && S.cfg.simulator === "2d") {  // the 2D simulator only runs matches
+    S.cfg.simulator = "mujoco";
+    controls.simulator.set("mujoco");
+    toast("Single robot runs on MuJoCo: the simulator was switched to MuJoCo 3D", "warn");
+  }
   if (match) {
     S.cfg.players = S.lastRoster && S.lastRoster.length ? S.lastRoster : defaultRoster();
     if (S.cfg.ball_detector === "yolo") S.cfg.ball_detector = "ground_truth";  // many cameras + YOLO cannot keep up
@@ -231,6 +246,7 @@ function buildForm() {
       } else if (f.type === "seg") {
         input = h("div", {class: "seg", role: "radiogroup", "aria-label": f.label}, f.opts.map(([v, t]) =>
           h("label", {}, h("input", {type: "radio", name: id, value: v, onchange: () => setCfg(f.k, v)}), h("span", {text: t}))));
+        f.segEl = input;
         controls[f.k] = {set: v => { $$("input", input).forEach(r => { r.checked = r.value === v; }); }};
       } else if (f.type === "switch") {
         const cb = h("input", {type: "checkbox", id, onchange: () => setCfg(f.k, cb.checked)});
@@ -281,6 +297,14 @@ function syncDerived() {
       const on = !it.f.show || it.f.show(S.cfg);
       it.el.hidden = !on;
       any = any || on;
+      if (it.f.optOff && it.f.segEl) {
+        $$("input", it.f.segEl).forEach(r => {
+          const why = it.f.optOff(S.cfg, r.value);
+          r.disabled = !!why;
+          r.parentElement.title = why;
+          r.parentElement.classList.toggle("off", !!why);
+        });
+      }
       const text = typeof it.f.help === "function" ? it.f.help(S.cfg) : (it.f.help || "");
       it.help.textContent = text;
       it.help.hidden = !text;
@@ -289,10 +313,15 @@ function syncDerived() {
     ref.el.hidden = ref.g.show ? !ref.g.show(S.cfg) : !any;
   }
   controls._mode && controls._mode.set();
+  hook("sync", S.cfg);
 }
 
 function setCfg(key, value, quiet) {
   S.cfg[key] = value;
+  if (key === "simulator" && value === "2d" && S.cfg.ball_detector !== "ground_truth") {
+    S.cfg.ball_detector = "ground_truth";  // there is no camera to run YOLO on
+    controls.ball_detector.set("ground_truth");
+  }
   if (key === "role") {
     if (value === "goal_keeper") S.cfg.player_id = 1; else if (S.cfg.player_id === 1) S.cfg.player_id = 2;
     controls.player_id.set(S.cfg.player_id);
@@ -303,11 +332,13 @@ function setCfg(key, value, quiet) {
   if (!quiet) { S.cur = ""; syncDerived(); renderSidebar(); saveDraft(); scheduleCheck(); }
 }
 function applyCfg(cfg, cur = "") {
-  S.cfg = {...DEFAULTS, ...cfg, players: (cfg.players || []).map(p => ({...p}))};
+  S.cfg = {...DEFAULTS, ...cfg, players: (cfg.players || []).map(p => ({...p})), settings: {...(cfg.settings || {})}};
   for (const k of Object.keys(S.cfg)) if (controls[k]) controls[k].set(S.cfg[k]);
+  hook("cfg", S.cfg);
   S.cur = cur;
   syncDerived(); renderSidebar(); saveDraft(); scheduleCheck(0);
 }
+ui.edited = () => { S.cur = ""; syncDerived(); renderSidebar(); saveDraft(); scheduleCheck(); };
 function saveDraft() { try { localStorage.setItem("soccerLauncher.draft", JSON.stringify(S.cfg)); } catch (e) { /* private mode */ } }
 function loadDraft() { try { return JSON.parse(localStorage.getItem("soccerLauncher.draft") || "null"); } catch (e) { return null; } }
 
@@ -452,8 +483,14 @@ function renderOverlay() {
       : "Launch it from the Launch tab to drive, place the ball and robot, and fire shots.";
   }
 }
+async function refreshSettings(hash) {
+  const r = await api("/api/launcher/state");
+  if (r.ok && S.static) { S.static.settings = r.data.settings; S.static.settings_hash = r.data.settings_hash; hook("settingsChanged"); }
+  S.settingsHash = hash;
+}
 function onState(snap) {
   const prev = S.lastState;
+  if (S.settingsHash !== undefined && snap.settings_hash !== undefined && snap.settings_hash !== S.settingsHash) refreshSettings(snap.settings_hash);
   S.srv = snap;
   S.lastState = snap.state;
   if (snap.state !== "running" && snap.state !== "stopping") { S.ready = false; S.status = {}; }
@@ -466,7 +503,10 @@ async function launch() {
   const bad = Object.values(S.parseErrors);
   if (bad.length) { toast(bad[0], "bad"); $("#checks").scrollIntoView({block: "center", behavior: "smooth"}); return; }
   const r = await api("/api/launcher/launch", {config: S.cfg, force: $("#force").checked});
-  if (r.ok) { S.autoSwitched = false; openDrawer(true); toast(r.data.stale ? "Building rcap, then launching…" : "Launching…", "good"); }
+  if (r.ok) {
+    S.autoSwitched = false; openDrawer(true); toast(r.data.stale ? "Building rcap, then launching…" : "Launching…", "good");
+    if (S.cfg.simulator === "2d") { S.autoSwitched = true; showTab("control"); }  // the page waits for the sim itself
+  }
   else if (r.status === 422) {
     S.check = r.data; renderChecks();
     const first = (r.data.errors || [])[0] || ((r.data.checks || []).find(c => c.level === "fail") || {}).text;
@@ -665,6 +705,7 @@ const placeBall = (x, y) => act("/api/shoot", {x, y, speed: 0, direction_deg: 0,
 const NS = "http://www.w3.org/2000/svg";
 const L = 11.0015, W = 7.063;   // half length / half width of FD_ROBOLEAGUE
 const svgEl = (tag, attrs = {}, ...kids) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); e.append(...kids); return e; };
+ui.svgEl = svgEl;
 let fieldG, ballEl, robotEl, ghostEl, aimEl, botLayer, botEls = [], botKey = "";
 function buildPitch() {
   const svg = $("#pitch");
@@ -686,7 +727,10 @@ function buildPitch() {
   ballEl = svgEl("circle", {class: "ball", r: .22, visibility: "hidden"});
   robotEl = svgEl("g", {visibility: "hidden"}, svgEl("circle", {class: "robot-body", r: .38}), svgEl("path", {class: "robot-body", d: "M.2 -.2L.75 0L.2 .2Z"}));
   botLayer = svgEl("g");
-  fieldG.append(ghostEl, aimEl, ballEl, robotEl, botLayer);
+  const wmUnder = svgEl("g", {class: "wm-under", "pointer-events": "none"}), wmOver = svgEl("g", {class: "wm-over", "pointer-events": "none"});
+  fieldG.append(wmUnder, ghostEl, aimEl, ballEl, robotEl, botLayer, wmOver);
+  ui.layers = {under: wmUnder, over: wmOver};
+  hook("mapBuilt", ui.layers);
   svg.append(fieldG,
     svgEl("text", {x: -L + .4, y: W - .35}, "our goal"), svgEl("text", {x: L - .4, y: W - .35, "text-anchor": "end"}, "opponent"));
 }
@@ -708,14 +752,20 @@ function updateMarkers() {
       botEls = st.robots.map(r => {
         const body = svgEl("g", {}, svgEl("circle", {class: "robot-body", r: .38}), svgEl("path", {class: "robot-body", d: "M.2 -.2L.75 0L.2 .2Z"}));
         const label = svgEl("text", {class: "bot-label", "text-anchor": "middle", "dominant-baseline": "central", transform: "scale(1,-1)"}, String(r.player_id));
-        const g = svgEl("g", {class: `bot ${r.team}`, "data-robot": r.index}, svgEl("circle", {class: "ring", r: .62}), body, label);
+        const g = svgEl("g", {class: `bot ${r.team}`, "data-robot": r.index}, svgEl("circle", {class: "hit", r: .62}), svgEl("circle", {class: "ring", r: .62}), body, label);
         botLayer.append(g);
         return {g, body};
       });
     }
+    const held = S.held && performance.now() < S.held.until ? S.held : null;
+    if (S.held && !held) S.held = null;
     st.robots.forEach((r, i) => {
       const b = botEls[i];
-      b.g.setAttribute("transform", `translate(${r.x} ${r.y})`);
+      let x = r.x, y = r.y;
+      if (held && held.idx === r.index) {  // just dropped: show it where it was put until the sim reports it there
+        if (Math.hypot(r.x - held.x, r.y - held.y) < 0.3) S.held = null; else { x = held.x; y = held.y; }
+      }
+      b.g.setAttribute("transform", `translate(${x} ${y})`);
       b.body.setAttribute("transform", `rotate(${r.yaw * 180 / Math.PI})`);
       b.g.classList.toggle("sel", r.index === S.sel);
       b.g.classList.toggle("down", !!r.fallen);
@@ -749,10 +799,19 @@ const HINTS = {
 function setupMap() {
   const svg = $("#pitch");
   let drag = null;
+  let grab = null;  // a robot being carried: {idx, label, start, off: pointer-to-robot offset, x, y, yaw, moved}
   const hint = () => { $("#map-hint").textContent = HINTS[mapTool()]; $("#shot-controls").hidden = mapTool() !== "shot"; };
   $$("input[name=maptool]").forEach(r => r.addEventListener("change", hint));
   hint();
-  function clear() { drag = null; ghostEl.setAttribute("visibility", "hidden"); aimEl.setAttribute("visibility", "hidden"); $("#map-readout").textContent = " "; }
+  function clear() { drag = null; grab = null; svg.classList.remove("grabbing"); ghostEl.setAttribute("visibility", "hidden"); aimEl.setAttribute("visibility", "hidden"); $("#map-readout").textContent = "\u00a0"; }
+  function drawGrab(p) {
+    const x = clamp(p.x + grab.off.x, -L, L), y = clamp(p.y + grab.off.y, -W, W);
+    grab.x = x; grab.y = y;
+    ghostEl.replaceChildren(svgEl("circle", {class: "ghost", cx: x, cy: y, r: .38}),
+      svgEl("path", {class: "aim", d: `M${x} ${y}L${x + Math.cos(grab.yaw) * .7} ${y + Math.sin(grab.yaw) * .7}`}));
+    ghostEl.setAttribute("visibility", "visible");
+    $("#map-readout").textContent = `robot ${grab.label} to (${fmt(x)}, ${fmt(y)}) m`;
+  }
   function draw(p) {
     const dx = p.x - drag.x, dy = p.y - drag.y, dist = Math.hypot(dx, dy);
     if (dist > 0.15) drag.ang = Math.atan2(dy, dx);
@@ -772,7 +831,14 @@ function setupMap() {
   svg.addEventListener("pointerdown", e => {
     if (!S.ready || e.button > 0) return;
     const bot = e.target.closest && e.target.closest("[data-robot]");
-    if (bot) { selectRobot(Number(bot.getAttribute("data-robot"))); return; }  // clicking a robot selects it
+    if (bot) {  // press a robot: a click selects it, dragging it carries it to a new spot (it is stood up there)
+      const idx = Number(bot.getAttribute("data-robot")), r = (S.status.robots || [])[idx];
+      if (!r) return;
+      const p0 = fieldPoint(e);
+      svg.setPointerCapture(e.pointerId);
+      grab = {idx, label: r.label, start: p0, off: {x: r.x - p0.x, y: r.y - p0.y}, x: r.x, y: r.y, yaw: r.yaw, moved: false};
+      return;
+    }
     const p = fieldPoint(e), tool = mapTool();
     if (tool === "ball") { placeBall(p.x, p.y); $("#map-readout").textContent = `ball placed at (${fmt(p.x)}, ${fmt(p.y)}) m`; return; }
     svg.setPointerCapture(e.pointerId);
@@ -782,8 +848,25 @@ function setupMap() {
     drag = {tool, x: o.x, y: o.y, ang: tool === "robot" ? (S.status.robot ? S.status.robot.yaw : 0) : Math.PI};
     draw(p);
   });
-  svg.addEventListener("pointermove", e => { if (drag) draw(fieldPoint(e)); });
+  svg.addEventListener("pointermove", e => {
+    if (grab) {
+      const p = fieldPoint(e);
+      if (!grab.moved && Math.hypot(p.x - grab.start.x, p.y - grab.start.y) > 0.25) { grab.moved = true; svg.classList.add("grabbing"); }
+      if (grab.moved) drawGrab(p);
+      return;
+    }
+    if (drag) draw(fieldPoint(e));
+  });
   svg.addEventListener("pointerup", async e => {
+    if (grab) {
+      const g = grab;
+      clear();
+      if (!g.moved) { selectRobot(g.idx); return; }
+      S.held = {idx: g.idx, x: g.x, y: g.y, until: performance.now() + 1500};
+      S.sel = g.idx;
+      await act("/api/reset_robot", {robot: g.idx, x: g.x, y: g.y, yaw: g.yaw});
+      return;
+    }
     if (!drag) return;
     const d = drag, p = fieldPoint(e), dist = Math.hypot(p.x - d.x, p.y - d.y);
     clear();
@@ -819,6 +902,8 @@ function renderStatus() {
       return p.over ? tag(`${text} · over, score 0`, "bad") : tag(text, p.limit && p.used > 0.8 * p.limit ? "warn" : "");
     })]);
   }
+  if (s.sim) rows.push(["Simulator", [tag(s.sim === "kinematic" ? "2D kinematic" : "MuJoCo", s.sim === "kinematic" ? "info" : ""),
+    s.seed !== null && s.seed !== undefined ? tag(`seed ${s.seed}`) : null]]);
   rows.push(
     ["Referee", [tag(s.state || "–", stKind), s.set_play && s.set_play !== "NONE" ? tag(s.set_play.replace("_", " "), "warn") : null,
       tag(kick), s.stopped ? tag("stopped", "bad") : null, s.set_play_secs_left ? tag(`${s.set_play_secs_left}s`) : null]],
@@ -838,7 +923,8 @@ function renderStatus() {
   $("#kick-opp").textContent = match ? "away kicks" : "opponent kicks";
   $("#kick-us").textContent = match ? "home kicks" : "we kick";
   $("#reset-robot").textContent = match ? "Robot to its start spot" : "Robot to goal centre";
-  $("#field-title").textContent = match ? "Field · home attacks →" : "Field";
+  $("#field-title").textContent = (match ? "Field · home attacks →" : "Field") + (s.sim === "kinematic" ? " · 2D simulator" : "");
+  $("#fire-panel").hidden = s.sim === "kinematic";  // the sliders it fires live in the MuJoCo viewer
   renderPicks();
 }
 let polling = false;
@@ -853,7 +939,7 @@ async function pollStatus() {
     S.status = S.ready ? s : {};
     if (S.ready && s.last_shot && s.last_shot !== S.lastShot) { if (S.lastShot !== "" || s.shots) toast(`Shot: ${s.last_shot}`, /^goal/i.test(s.last_shot) ? "bad" : "good"); }
     S.lastShot = s.last_shot || S.lastShot;
-    if (S.ready) { updateMarkers(); renderStatus(); }
+    if (S.ready) { updateMarkers(); renderStatus(); hook("status", S.status); }
     if (S.ready !== was) {
       renderTop();
       if (S.ready && !S.autoSwitched) { S.autoSwitched = true; showTab("control"); openDrawer(false); toast("Sim is up: controls are live", "good"); }
@@ -864,6 +950,7 @@ async function pollStatus() {
 /* ------------------------------------------------------------------ boot */
 async function boot() {
   buildForm();
+  hook("formBuilt", $("#form"));
   buildControls();
   buildPitch();
   setupMap();
@@ -871,6 +958,7 @@ async function boot() {
   if (!r.ok) { $("#banner").hidden = false; $("#banner").textContent = "Cannot reach the launcher backend."; return; }
   S.static = r.data;
   S.srv = r.data;
+  S.settingsHash = r.data.settings_hash;
   const draft = loadDraft();
   applyCfg(draft || r.data.last);
   if (r.data.load_warning) toast(r.data.load_warning, "warn");
@@ -888,6 +976,8 @@ async function boot() {
   $("#drawer-toggle").onclick = () => openDrawer();
   $("#log-clear").onclick = () => { logEl().replaceChildren(); logCount = 0; $("#last-line").textContent = ""; };
   $("#log-copy").onclick = async () => { try { await navigator.clipboard.writeText(logEl().innerText); toast("Log copied", "good"); } catch (e) { toast("Copy failed", "warn"); } };
+  hook("settingsChanged");
+  hook("cfg", S.cfg);
   onState(r.data);
   connectEvents();
   showTab(location.hash === "#control" ? "control" : "launch");
@@ -895,5 +985,6 @@ async function boot() {
   setInterval(pollStatus, 250);
   if (["running", "starting", "building", "tool"].includes(r.data.state)) openDrawer(true);
 }
-boot();
+// start once settings.js / worldmodel.js (loaded after this file) have registered their hooks
+window.addEventListener("load", boot);
 })();

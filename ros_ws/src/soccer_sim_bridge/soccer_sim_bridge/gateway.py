@@ -18,24 +18,29 @@ import numpy as np
 MODE, VX, VY, VYAW, HEAD_PITCH, HEAD_YAW, KICK_ACTIVE, KICK_VERSION, GETUP = range(9)
 KICK_VALID, KICK_X, KICK_Y, KICK_DIR, KICK_POWER, KICK_STAMP, DECISION_TOPIC = range(9, 16)
 STAND_UP, ALIVE, STOP = 16, 17, 18
+WM_SEQ, WM_LEN, WM_STAMP, WM_SEEN = 19, 20, 21, 22  # world-model slot: seqlock counter, length, monotonic stamp, ever seen
 NF = 24
 TEXT_BYTES = 256
+WM_BYTES = 8192  # one brain's /brain/world_model snapshot (about 2-3 KB of JSON for a 5v5 team)
 DECISION, EVENT = 0, 1
 
 
 class Shared:
-    """The memory-mapped state: n float rows, then two text slots (decision, event) per robot."""
+    """The memory-mapped state: n float rows, then two text slots (decision, event) per robot, then a world-model slot
+    per robot (a seqlock: the gateway writes it, the match process reads it, neither ever blocks)."""
 
     def __init__(self, path: str, n: int, create: bool = False):
         self.n = n
         self._float_bytes = n * NF * 8
-        size = self._float_bytes + n * 2 * TEXT_BYTES
+        text_bytes = n * 2 * TEXT_BYTES
+        size = self._float_bytes + text_bytes + n * WM_BYTES
         if create:
             with open(path, "wb") as f:
                 f.truncate(size)
         self._mm = np.memmap(path, dtype=np.uint8, mode="r+", shape=(size,))
         self.rows = self._mm[: self._float_bytes].view(np.float64).reshape(n, NF)
-        self._text = self._mm[self._float_bytes:].reshape(n, 2, TEXT_BYTES)
+        self._text = self._mm[self._float_bytes:self._float_bytes + text_bytes].reshape(n, 2, TEXT_BYTES)
+        self._wm = self._mm[self._float_bytes + text_bytes:].reshape(n, WM_BYTES)
 
     def set_text(self, i: int, slot: int, text: str) -> None:
         raw = text.encode()[: TEXT_BYTES - 1]
@@ -44,6 +49,34 @@ class Shared:
 
     def get_text(self, i: int, slot: int) -> str:
         return bytes(self._text[i, slot]).rstrip(b"\0").decode(errors="replace")
+
+    def set_wm(self, i: int, data: bytes) -> bool:
+        """Publish robot i's world-model snapshot. False (and the old one stays) when it does not fit."""
+        if len(data) > WM_BYTES:
+            return False
+        row = self.rows[i]
+        row[WM_SEQ] += 1.0  # odd: a write is in progress
+        self._wm[i, : len(data)] = np.frombuffer(data, dtype=np.uint8)
+        row[WM_LEN] = float(len(data))
+        row[WM_STAMP] = time.monotonic()
+        row[WM_SEEN] = 1.0
+        row[WM_SEQ] += 1.0  # even: complete
+        return True
+
+    def get_wm(self, i: int, tries: int = 4) -> tuple[float, bytes] | None:
+        """(stamp, snapshot) of robot i, or None when it never published or a consistent copy was not obtained."""
+        row = self.rows[i]
+        if not row[WM_SEEN]:
+            return None
+        for _ in range(tries):
+            seq = row[WM_SEQ]
+            if int(seq) % 2:
+                continue
+            data = bytes(self._wm[i, : int(row[WM_LEN])])
+            stamp = float(row[WM_STAMP])
+            if row[WM_SEQ] == seq:
+                return stamp, data
+        return None
 
 
 def run(path: str, n: int, index: int, domain: int, name: str, parent_pid: int) -> None:
@@ -102,6 +135,10 @@ def run(path: str, n: int, index: int, domain: int, name: str, parent_pid: int) 
         row[DECISION_TOPIC] = 1.0
         shared.set_text(index, DECISION, msg.data or "-")
 
+    def on_world_model(msg) -> None:
+        shared.set_wm(index, msg.data.encode())
+
+    node.create_subscription(String, "/brain/world_model", on_world_model, 10)
     node.create_subscription(RpcReqMsg, "LocoApiTopicReq", on_rpc, 10)
     node.create_subscription(Kick, "/kick_ball", on_kick, 10)
     node.create_subscription(String, "/speak", on_speak, 10)

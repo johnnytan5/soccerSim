@@ -176,3 +176,22 @@ def test_event_wait_wakes_on_logs_and_state(world):
     snap_before = jobs.snapshot()["version"]
     jobs.refresh("")  # first probe changes the cached rcap info
     assert jobs.snapshot()["version"] >= snap_before
+
+
+def test_state_offers_the_settings_of_the_rcap_checkout_and_the_competition_default(world):
+    import json
+
+    from soccer_launcher.config import DEFAULT_CONFIG
+    local, rcap, store, cfg = world
+    jobs = JobController(store, FakeRunner(local), local)
+    jobs.refresh(str(rcap))
+    state = jobs.static_state()
+    assert state["last"] == DEFAULT_CONFIG.to_dict() and state["default_config"] == DEFAULT_CONFIG.to_dict()
+    assert not any(s["source"] == "rcap" for s in state["settings"]) and jobs.snapshot()["settings_hash"] == ""
+    (rcap / "src/brain/config").mkdir()
+    (rcap / "src/brain/config/world_model.schema.json").write_text(json.dumps({"namespace": "world_model", "params": [
+        {"key": "enabled", "group": "general", "type": "bool", "default": True, "unit": "", "help": "on"}]}))
+    jobs.refresh(str(rcap))
+    state = jobs.static_state()
+    assert [s["key"] for s in state["settings"] if s["source"] == "rcap"] == ["world_model.enabled"]
+    assert jobs.snapshot()["settings_hash"]
