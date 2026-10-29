@@ -2,6 +2,9 @@
 
 roster:      JSON list of {team, player_id, role}; team is "home" or "away".
 domain_base: ROS domain of the first robot; robot i uses domain_base + i, the same as the match bridge.
+brain_params: JSON object of extra ROS parameter overrides for every brain (dotted names, typed values), e.g.
+             {"communication.team_broadcast_rate_hz": 3.0, "world_model.fusion.method": "ci"}. Wins over
+             enable_com:= and config.yaml. The launcher builds it from its settings.
 """
 
 import json
@@ -25,6 +28,9 @@ def _brains(context):
     tree = LaunchConfiguration("tree").perform(context)
     enable_com = LaunchConfiguration("enable_com").perform(context).lower() == "true"
     gc_ip = LaunchConfiguration("game_control_ip").perform(context)
+    extra = json.loads(LaunchConfiguration("brain_params").perform(context) or "{}")
+    if not isinstance(extra, dict):
+        raise ValueError("brain_params must be a JSON object")
     nodes = []
     for i, p in enumerate(roster):
         overrides = {
@@ -42,6 +48,7 @@ def _brains(context):
         }
         if gc_ip:
             overrides["game_control_ip"] = gc_ip
+        overrides.update(extra)
         nodes.append(
             Node(
                 package="brain",
@@ -63,6 +70,7 @@ def generate_launch_description():
             DeclareLaunchArgument("tree", default_value="game.xml"),
             DeclareLaunchArgument("enable_com", default_value="true"),
             DeclareLaunchArgument("game_control_ip", default_value=""),
+            DeclareLaunchArgument("brain_params", default_value="{}"),
             OpaqueFunction(function=_brains),
         ]
     )

@@ -23,14 +23,25 @@ done
 # see patches/brain-clang.patch). Re-copied on every build so local brain edits are always what runs.
 rsync -a --delete --exclude build --exclude install --exclude log --exclude __pycache__ \
   "$ROBOTEDGE_ROOT/src/brain/" "$SRC/brain/"
-if ! patch -p1 -d "$SRC/brain" --forward --silent < "$ROOT/patches/brain-clang.patch"; then
+# apply_patch NAME: apply patches/NAME.patch to the copy; "already in the tree" (an RCAP branch that adopted the
+# change) counts as applied, because patch(1) exits 1 for it just as it does for a hunk that no longer fits.
+apply_patch() {
+  local patch_file="$ROOT/patches/$1.patch"
+  if patch -p1 -d "$SRC/brain" --reverse --dry-run --silent < "$patch_file" >/dev/null 2>&1; then
+    echo "patches/$1.patch is already part of $ROBOTEDGE_ROOT/src/brain; skipping it."
+    return 0
+  fi
+  patch -p1 -d "$SRC/brain" --forward --silent < "$patch_file"
+}
+
+if ! apply_patch brain-clang; then
   echo "patches/brain-clang.patch no longer applies to $ROBOTEDGE_ROOT/src/brain; refresh it." >&2
   exit 1
 fi
 
 # Optional: publish brain's decision on /brain/decision so the viewer overlay never misses a change
 # (brain's own /speak announcements are rate-limited). The overlay falls back to /speak without it.
-if ! patch -p1 -d "$SRC/brain" --forward --silent < "$ROOT/patches/brain-decision-topic.patch"; then
+if ! apply_patch brain-decision-topic; then
   echo "warning: patches/brain-decision-topic.patch no longer applies; the viewer overlay will use /speak instead." >&2
   rm -f "$SRC"/brain/src/brain.cpp.rej "$SRC"/brain/src/brain.cpp.orig
 fi

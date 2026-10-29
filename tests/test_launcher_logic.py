@@ -4,8 +4,12 @@ import subprocess
 import pytest
 
 from soccer_launcher import build, command, preflight, rcap
-from soccer_launcher.config import PRESETS, LaunchConfig
+from soccer_launcher.config import COMPETITION, DEFAULT_CONFIG, PRESETS, LaunchConfig
 from soccer_launcher.store import Store
+
+
+def preset(name):
+    return next(p for p in PRESETS if p.name == name)
 
 
 # ---- config ---------------------------------------------------------------
@@ -99,7 +103,7 @@ def test_match_needs_a_sane_length_and_domain_room():
 
 
 def test_players_survive_the_json_roundtrip_and_junk_is_dropped():
-    cfg = PRESETS[5].config
+    cfg = preset("Team vs team (5v5)").config
     assert LaunchConfig.from_dict(cfg.to_dict()) == cfg
     back = LaunchConfig.from_dict({"players": [player("home", 2, "striker"), "junk", {"team": "away", "player_id": "x"}]})
     assert len(back.players) == 2 and back.players[1]["player_id"] == 0
@@ -107,7 +111,7 @@ def test_players_survive_the_json_roundtrip_and_junk_is_dropped():
 
 
 def test_match_command_runs_the_match_script_with_the_roster():
-    argv, env = command.build_command(PRESETS[5].config, "/rcap", 9000)
+    argv, env = command.build_command(preset("Team vs team (5v5)").config, "/rcap", 9000)
     assert argv[:3] == ["bash", "scripts/run_match.sh", "--viewer"]
     roster = json.loads(argv[3])
     assert len(roster) == 10 and roster[0] == player("home", 1, "goal_keeper")
@@ -116,7 +120,7 @@ def test_match_command_runs_the_match_script_with_the_roster():
     assert "--ball-detector" in margs and "ground_truth" in margs and "--web-port" in margs and "9000" in margs
     assert margs[margs.index("--start") + 1] == "quick" and margs[margs.index("--half-minutes") + 1] == "10"
     assert "--continuous" not in margs and env["ROBOTEDGE_ROOT"] == "/rcap" and "BRIDGE_ARGS" not in env
-    cfg = LaunchConfig(**{**PRESETS[5].config.to_dict(), "match_mode": "full", "continuous": True, "ros_domain_id": 90})
+    cfg = LaunchConfig(**{**preset("Team vs team (5v5)").config.to_dict(), "match_mode": "full", "continuous": True, "ros_domain_id": 90})
     argv, env = command.build_command(cfg)
     assert "domain_base:=90" in argv
     m = env["MATCH_ARGS"].split()
@@ -130,10 +134,10 @@ def test_single_robot_command_is_unchanged_by_the_match_fields():
 
 # ---- command --------------------------------------------------------------
 def test_existing_pixi_tasks_are_reproduced():
-    argv, env = command.build_command(PRESETS[1].config)  # keeper-quick
+    argv, env = command.build_command(preset("Lone keeper (quick)").config)  # keeper-quick
     assert argv[:5] == ["bash", "scripts/run_sim.sh", "--viewer", "--quick", "tree:=game.xml"]
     assert "role:=goal_keeper" in argv and "player_id:=1" in argv
-    argv, _ = command.build_command(PRESETS[2].config)  # striker
+    argv, _ = command.build_command(preset("Lone striker (quick)").config)  # striker
     assert "role:=striker" in argv and "player_id:=2" in argv and "--quick" in argv
 
 
@@ -300,10 +304,10 @@ def test_match_preflight_warns_about_yolo_with_many_robots_and_missing_network(t
     from soccer_launcher.preflight import _has_default_route, run
     from soccer_launcher.rcap import RcapInfo
     info = RcapInfo(root=tmp_path, valid=True, branch="main", sha="abc", subject="", dirty=False, detached=False)
-    cfg = LaunchConfig(**{**PRESETS[5].config.to_dict(), "ball_detector": "yolo"})
+    cfg = LaunchConfig(**{**preset("Team vs team (5v5)").config.to_dict(), "ball_detector": "yolo"})
     texts = [c.text for c in run(cfg, info, False, tmp_path, env={"DISPLAY": ":0"}, platform="Linux")]
     assert any("10 robots" in t and "1.2 times a second" in t for t in texts)
-    ok = [c.text for c in run(PRESETS[5].config, info, False, tmp_path, env={"DISPLAY": ":0"}, platform="Linux")]
+    ok = [c.text for c in run(preset("Team vs team (5v5)").config, info, False, tmp_path, env={"DISPLAY": ":0"}, platform="Linux")]
     assert not any("YOLO" in t for t in ok)
     route = tmp_path / "route"
     route.write_text("Iface\tDestination\tGateway\tFlags\neth0\t00000000\t0102A8C0\t0003\n")
@@ -313,7 +317,7 @@ def test_match_preflight_warns_about_yolo_with_many_robots_and_missing_network(t
 
 
 def test_detailed_bodies_flag_roundtrips_and_reaches_the_bridge_only_when_set():
-    cfg = PRESETS[5].config
+    cfg = preset("Team vs team (5v5)").config
     assert not cfg.detailed_bodies and "--detailed-bodies" not in command.build_command(cfg)[1]["MATCH_ARGS"]
     on = LaunchConfig(**{**cfg.to_dict(), "detailed_bodies": True})
     assert LaunchConfig.from_dict(on.to_dict()) == on
@@ -325,7 +329,7 @@ def test_detailed_bodies_preflight_warns_with_viewer_and_many_robots(tmp_path):
     from soccer_launcher.rcap import RcapInfo
     info = RcapInfo(root=tmp_path, valid=True, branch="main", sha="abc", subject="", dirty=False, detached=False)
     def texts(**kw):
-        cfg = LaunchConfig(**{**PRESETS[5].config.to_dict(), **kw})
+        cfg = LaunchConfig(**{**preset("Team vs team (5v5)").config.to_dict(), **kw})
         return [c.text for c in run(cfg, info, False, tmp_path, env={"DISPLAY": ":0"}, platform="Linux")]
     assert any("detailed robot bodies" in t and "10 robots" in t for t in texts(detailed_bodies=True))
     assert not any("detailed robot bodies" in t for t in texts(detailed_bodies=True, viewer=False))
@@ -334,7 +338,7 @@ def test_detailed_bodies_preflight_warns_with_viewer_and_many_robots(tmp_path):
 
 def test_graphics_defaults_to_gpu_and_only_cpu_reaches_the_sim():
     assert LaunchConfig().graphics == "gpu" and all(p.config.graphics == "gpu" for p in PRESETS)
-    for cfg in (LaunchConfig(), PRESETS[5].config):
+    for cfg in (LaunchConfig(), preset("Team vs team (5v5)").config):
         assert "SIM_VIEWER_GL" not in command.build_command(cfg)[1]
         cpu = LaunchConfig(**{**cfg.to_dict(), "graphics": "cpu"})
         assert command.build_command(cpu)[1]["SIM_VIEWER_GL"] == "cpu"
@@ -371,8 +375,8 @@ def test_packet_budget_survives_the_roundtrip_and_a_wrong_type_falls_back():
 
 
 def test_match_command_passes_the_packet_budget_to_the_bridge():
-    argv, env = command.build_command(LaunchConfig(**{**PRESETS[5].config.to_dict(), "packet_budget": 500}))
+    argv, env = command.build_command(LaunchConfig(**{**preset("Team vs team (5v5)").config.to_dict(), "packet_budget": 500}))
     m = env["MATCH_ARGS"].split()
     assert m[m.index("--packet-budget") + 1] == "500"
-    _, env = command.build_command(PRESETS[5].config)
+    _, env = command.build_command(preset("Team vs team (5v5)").config)
     assert env["MATCH_ARGS"].split()[env["MATCH_ARGS"].split().index("--packet-budget") + 1] == "60000"

@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field, fields
 
 from soccer_sim.roster import AWAY, HOME, PlayerSpec, standard_team, validate_roster
 
+from . import settings as setting_registry
+
 ROLES = ("goal_keeper", "striker", "defender")
 TREES = ("game.xml", "chase.xml", "demo.xml")
 DETECTORS = ("yolo", "ground_truth")
@@ -14,6 +16,7 @@ CAMERA_GL = ("auto", "software", "gpu")
 GRAPHICS = ("gpu", "cpu")  # what draws the MuJoCo viewer window
 MUJOCO_GL = ("", "egl", "glfw", "osmesa")
 MATCH_MODES = ("quick", "full")
+SIMULATORS = ("2d", "mujoco")  # 2d: browser map on the kinematic simulator; mujoco: MuJoCo physics (+ viewer window)
 GOALKEEPER_ID = 1  # brain forces this player id to be the keeper whatever `role` says
 DEFAULT_DOMAIN_BASE = 70  # match runs use one ROS domain per robot, counting up from here
 MAX_ROBOTS = 10
@@ -29,7 +32,8 @@ class LaunchConfig:
     player_id: int = 1
     tree: str = "game.xml"
     match_mode: str = "quick"  # quick: scripted referee, soccer mode; full: real match procedure
-    viewer: bool = True
+    simulator: str = "mujoco"
+    viewer: bool = True  # mujoco only: open the 3D viewer window
     graphics: str = "gpu"  # viewer window: your graphics card, or "cpu" = Mesa software rendering (Linux only)
     # Match: a roster of {team: home|away, player_id, role} plays a whole game (empty = the single robot above)
     players: list = field(default_factory=list)
@@ -46,6 +50,8 @@ class LaunchConfig:
     ball_x: float | None = None
     ball_y: float | None = None
     referee_schedule: str = ""
+    # Tunable settings from soccer_launcher.settings: registry key -> value (absent = keep config.yaml's value)
+    settings: dict = field(default_factory=dict)
     # Advanced
     rcap_root: str = ""  # "" = auto-detect (same order as scripts/activate.sh)
     sim_vy_max: float | None = None
@@ -62,9 +68,18 @@ class LaunchConfig:
     def roster(self) -> list[PlayerSpec]:
         return [PlayerSpec.from_dict(p) for p in self.players if isinstance(p, dict)]
 
-    def validate(self) -> list[str]:
-        """Human-readable problems; an empty list means launchable."""
+    def validate(self, registry=None) -> list[str]:
+        """Human-readable problems; an empty list means launchable. `registry`: the settings of the RCAP checkout
+        being launched (soccer_launcher.settings.registry_for); defaults to the static ones."""
         errs: list[str] = []
+        if self.simulator not in SIMULATORS:
+            errs.append("simulator must be 2d or mujoco")
+        elif self.simulator == "2d":
+            if not self.is_match:
+                errs.append("the 2D simulator runs matches: add players (single-robot presets use MuJoCo)")
+            if self.ball_detector != "ground_truth":
+                errs.append("the 2D simulator has no camera: use the ground-truth ball detector")
+        errs += setting_registry.validate(self.settings, registry if registry is not None else list(setting_registry.STATIC))
         if self.is_match:
             errs += self._validate_match()
         elif self.role not in ROLES:
@@ -132,6 +147,9 @@ class LaunchConfig:
                 if isinstance(value, list):
                     base.players = [_clean_player(p) for p in value if isinstance(p, dict)]
                 continue
+            if key == "settings":
+                base.settings = setting_registry.clean(value)
+                continue
             try:
                 if isinstance(default, bool):
                     value = bool(value) if isinstance(value, bool) else default
@@ -184,7 +202,27 @@ def _match(players: list[dict], **kw) -> LaunchConfig:
     return LaunchConfig(players=players, ball_detector="ground_truth", match_mode="quick", **kw)
 
 
+COMPETITION = Preset(
+    "Competition", "5v5 as at the competition: real match procedure, two 10-minute halves, 60000-packet budget, "
+    "team comms at 3 Hz, noisy perception. The default; change anything you like.",
+    LaunchConfig(
+        simulator="2d", players=_players((1, 2, 3, 4, 5), (1, 2, 3, 4, 5)), ball_detector="ground_truth",
+        match_mode="full", half_minutes=10.0, continuous=False, packet_budget=60000,
+        settings={
+            "enable_com": True,
+            "communication.team_broadcast_rate_hz": 3.0,
+            "communication.discovery_rate_hz": 1.0,
+            # ponytail: placeholders until measured on the real robots; without noise fusion has nothing to fix
+            "sim.detection_noise_std": 0.05,
+            "sim.detection_noise_range_gain": 0.03,
+            "sim.odom_drift_pct": 1.0,
+            "sim.odom_yaw_drift_deg": 1.0,
+            "sim.collisions": True,
+            "sim.falls": True,
+        }))
+
 PRESETS: tuple[Preset, ...] = (
+    COMPETITION,
     Preset("Lone keeper", "Goalkeeper, real match procedure + viewer (pixi run keeper)",
            LaunchConfig(role="goal_keeper", player_id=1, match_mode="full")),
     Preset("Lone keeper (quick)", "Goalkeeper, scripted referee, viewer (pixi run keeper-quick)",
@@ -207,3 +245,6 @@ PRESETS: tuple[Preset, ...] = (
     Preset("Custom match", "Build your own: pick who is on the pitch, their team and role",
            _match(_players((1, 2), (2,)), continuous=True), custom=True),
 )
+
+
+DEFAULT_CONFIG = COMPETITION.config  # what a fresh launcher shows

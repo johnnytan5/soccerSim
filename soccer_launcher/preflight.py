@@ -6,6 +6,7 @@ import socket
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import settings
 from .config import LaunchConfig
 from .rcap import RcapInfo
 from .store import project_root
@@ -38,7 +39,8 @@ def run(cfg: LaunchConfig, info: RcapInfo, stale: bool, root: Path | None = None
     env = os.environ if env is None else env
     platform = platform or os.uname().sysname
     out: list[Check] = []
-    for problem in cfg.validate():
+    registry = settings.registry_for(info.root if info.valid else None)
+    for problem in cfg.validate(registry):
         out.append(Check("fail", problem))
     if info.valid:
         where = info.branch or ("detached " + info.sha)
@@ -49,13 +51,23 @@ def run(cfg: LaunchConfig, info: RcapInfo, stale: bool, root: Path | None = None
         out.append(Check("ok", "YOLO ball model present"))
     elif cfg.ball_detector == "yolo":
         out.append(Check("fail", f"missing {MODEL}", fix="fetch-models"))
-    else:
+    elif cfg.simulator != "2d":
         out.append(Check("warn", f"missing {MODEL} (not needed for ground_truth)"))
     out.append(Check("warn", "build is stale: it will be rebuilt first") if stale else Check("ok", "build is up to date"))
-    if cfg.viewer and platform == "Linux" and not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")) \
+    mujoco_viewer = cfg.simulator == "mujoco" and cfg.viewer
+    if cfg.simulator == "2d":
+        out.append(Check("ok", "2D simulator: robots on the kinematic simulator, shown on the browser map "
+                               "(no MuJoCo, no viewer window)"))
+    if info.valid and not settings.load_schema(info.root):
+        out.append(Check("ok", "this rcap checkout has no world_model schema, so no world-model settings are offered"))
+    for key in settings.unknown_keys(cfg.settings, registry):
+        out.append(Check("warn", f"setting {key} is not known to this rcap checkout and will be ignored"))
+    if cfg.settings and not cfg.is_match:
+        out.append(Check("warn", "settings only reach brains in a match; the single-robot launch ignores them"))
+    if mujoco_viewer and platform == "Linux" and not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")) \
             and not Path("/tmp/.X11-unix/X0").exists():
         out.append(Check("warn", "viewer is on but no display found (DISPLAY/WSLg)"))
-    if cfg.viewer and cfg.graphics == "cpu":
+    if mujoco_viewer and cfg.graphics == "cpu":
         if platform == "Darwin":
             out.append(Check("warn", "graphics: CPU only applies on Linux; the viewer on macOS always uses the system's graphics"))
         else:
@@ -85,7 +97,7 @@ def _match_checks(cfg: LaunchConfig, platform: str) -> list[Check]:
         out.append(Check("warn", f"YOLO with {n} robots: the sim can render about {total:g} camera frames a second in "
                                  f"total, so each robot's camera updates only {total / n:.1f} times a second. "
                                  "Ground truth ball gives every robot full-rate perception"))
-    if cfg.detailed_bodies and cfg.viewer and n > 2:
+    if cfg.detailed_bodies and cfg.viewer and cfg.simulator == "mujoco" and n > 2:
         out.append(Check("warn", f"detailed robot bodies: {n} robots are about {n} million triangles, so the viewer "
                                  "will trail the sim. The simple team-coloured bodies stay smooth"))
     if platform == "Linux" and not _has_default_route():

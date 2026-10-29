@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import shlex
 
+from . import settings as setting_registry
 from .config import DEFAULT_DOMAIN_BASE, LaunchConfig
 
 
@@ -25,11 +26,20 @@ def bridge_args(cfg: LaunchConfig, web_port: int | None = None) -> list[str]:
     return out
 
 
-def match_args(cfg: LaunchConfig, web_port: int | None = None) -> list[str]:
+def _sim_value(v: object) -> str:
+    return ("true" if v else "false") if isinstance(v, bool) else repr(v) if isinstance(v, float) else str(v)
+
+
+def match_args(cfg: LaunchConfig, web_port: int | None = None, registry=None) -> list[str]:
     """Options for the match bridge (soccer_sim_bridge.match_node); run_match.sh word-splits them."""
     out = ["--ball-detector", cfg.ball_detector, "--start", "full_auto" if cfg.match_mode == "full" else "quick",
            "--half-minutes", f"{cfg.half_minutes:g}",
            "--packet-budget", str(cfg.packet_budget)]
+    if cfg.simulator == "2d":
+        out += ["--sim-backend", "kinematic"]
+    reg = registry if registry is not None else setting_registry.registry_for(None)
+    for name, value in setting_registry.sim_params(cfg.settings, reg, cfg.simulator):
+        out += ["--sim-param", f"{name}={_sim_value(value)}"]
     if cfg.continuous:
         out.append("--continuous")
     if cfg.detailed_bodies:
@@ -42,15 +52,18 @@ def match_args(cfg: LaunchConfig, web_port: int | None = None) -> list[str]:
     return out + shlex.split(cfg.extra_bridge_args)
 
 
-def _match_command(cfg: LaunchConfig, web_port: int | None) -> tuple[list[str], dict[str, str]]:
+def _match_command(cfg: LaunchConfig, web_port: int | None, registry) -> tuple[list[str], dict[str, str]]:
     roster = json.dumps([{k: p[k] for k in ("team", "player_id", "role")} for p in cfg.players], separators=(",", ":"))
     base = cfg.ros_domain_id if cfg.ros_domain_id is not None else DEFAULT_DOMAIN_BASE
     argv = ["bash", "scripts/run_match.sh"]
-    if cfg.viewer:
+    if cfg.simulator == "mujoco" and cfg.viewer:
         argv.append("--viewer")
     argv += [roster, f"tree:={cfg.tree}", f"domain_base:={base}"]
+    brain = setting_registry.brain_overrides(cfg.settings, registry)
+    if brain:  # only when set, so a config without settings builds the same command as before
+        argv.append("brain_params:=" + json.dumps(brain, separators=(",", ":"), sort_keys=True))
     argv += shlex.split(cfg.extra_launch_args)
-    return argv, {"MATCH_ARGS": shlex.join(match_args(cfg, web_port))}
+    return argv, {"MATCH_ARGS": shlex.join(match_args(cfg, web_port, registry))}
 
 
 def _graphics_env(cfg: LaunchConfig, env: dict[str, str]) -> None:
@@ -62,14 +75,15 @@ def _graphics_env(cfg: LaunchConfig, env: dict[str, str]) -> None:
 def build_command(cfg: LaunchConfig, rcap_root: str | None = None, web_port: int | None = None) -> tuple[list[str], dict[str, str]]:
     """Returns (argv, extra_env). argv is relative to the soccerSim root; env is merged over os.environ."""
     if cfg.is_match:
-        argv, env = _match_command(cfg, web_port)
+        argv, env = _match_command(cfg, web_port, setting_registry.registry_for(rcap_root))
         if cfg.sim_vy_max is not None:
             env["SIM_VY_MAX"] = str(cfg.sim_vy_max)
-        _graphics_env(cfg, env)
-        if cfg.camera_gl != "auto":
-            env["SIM_CAMERA_GL"] = cfg.camera_gl
-        if cfg.mujoco_gl:
-            env["MUJOCO_GL"] = cfg.mujoco_gl
+        if cfg.simulator == "mujoco":  # the 2D simulator has no viewer and renders no camera
+            _graphics_env(cfg, env)
+            if cfg.camera_gl != "auto":
+                env["SIM_CAMERA_GL"] = cfg.camera_gl
+            if cfg.mujoco_gl:
+                env["MUJOCO_GL"] = cfg.mujoco_gl
         if rcap_root:
             env["ROBOTEDGE_ROOT"] = rcap_root
         return argv, env

@@ -12,8 +12,8 @@ from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
-from . import build, command, preflight, rcap
-from .config import PRESETS, LaunchConfig
+from . import build, command, preflight, rcap, settings
+from .config import DEFAULT_CONFIG, PRESETS, LaunchConfig
 from .rcap import RcapInfo
 from .runner import TOOLS, TOOLS_BY_KEY, Runner
 from .store import Store, project_root
@@ -125,7 +125,7 @@ class JobController:
         info, status = self._ensure_probe(cfg.rcap_root)
         stale = force or status is None or status.stale
         checks = preflight.run(cfg, info, stale, self.local_root)
-        errs = cfg.validate()
+        errs = cfg.validate(settings.registry_for(info.root if info.valid else None))
         return {
             "errors": errs,
             "checks": [asdict(c) for c in checks],
@@ -147,13 +147,19 @@ class JobController:
                     "root": str(info.root), "valid": info.valid, "branch": info.branch, "sha": info.sha,
                     "subject": info.subject, "dirty": info.dirty, "detached": info.detached},
                 "build": None if status is None else {"stale": status.stale, "reason": status.reason},
+                # the form's settings come from the rcap checkout: the front end refetches when this changes
+                "settings_hash": settings.schema_hash(info.root) if info is not None and info.valid else "",
             }
 
     def static_state(self) -> dict:
         """Things that only change when the user edits them: config, presets, profiles, tools."""
-        last = self.store.last or LaunchConfig()
+        last = self.store.last or DEFAULT_CONFIG
+        info = self._info
+        root = info.root if info is not None and info.valid else rcap.locate(self._probe_key or "")
         return {
             "last": last.to_dict(),
+            "default_config": DEFAULT_CONFIG.to_dict(),
+            "settings": settings.public(root),
             "profiles": {k: v.to_dict() for k, v in sorted(self.store.profiles.items())},
             "presets": [{"name": p.name, "description": p.description, "available": p.available,
                          "blocked_reason": p.blocked_reason, "custom": p.custom,
