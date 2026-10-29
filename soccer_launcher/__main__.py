@@ -7,7 +7,8 @@ import subprocess
 import sys
 
 from . import build, command, rcap
-from .config import LaunchConfig
+from .config import DEFAULT_CONFIG
+from . import settings
 from .store import Store, project_root
 
 
@@ -15,8 +16,8 @@ def _relaunch_last() -> int:
     """--last: no TUI, just build if stale and run the last saved config in the foreground."""
     store = Store()
     store.load()
-    cfg = store.last or LaunchConfig()
-    errs = cfg.validate()
+    cfg = store.last or DEFAULT_CONFIG
+    errs = cfg.validate(settings.registry_for(rcap.locate(cfg.rcap_root)))
     if errs:
         print("last config is invalid: " + "; ".join(errs), file=sys.stderr)
         return 2

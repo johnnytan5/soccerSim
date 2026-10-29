@@ -20,6 +20,8 @@ _LOCAL_INPUTS = (
     "ros_ws/src/soccer_sim_bridge/setup.cfg", "ros_ws/src/soccer_sim_bridge/package.xml",
 )
 _SKIP_DIRS = {"build", "install", "log", "__pycache__", ".git"}
+# config.yaml and the world-model schema are read from the rcap tree at launch, not baked into the build.
+_READ_LIVE = ("src/brain/config",)
 
 
 def locate(override: str = "", env: dict[str, str] | None = None) -> Path:
@@ -89,6 +91,8 @@ def fingerprint(root: Path, local_root: Path | None = None) -> str:
             if not base.exists():
                 continue
             for f in _walk(base):
+                if f.relative_to(base_root).as_posix().startswith(_READ_LIVE):
+                    continue
                 try:
                     data = f.read_bytes()
                 except OSError:
