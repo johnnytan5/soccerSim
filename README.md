@@ -373,6 +373,9 @@ camera ball, predicted teammates, own and fused opponent tracks, and packet byte
 truth. Pick a robot or "All" and toggle layers. The data is each brain's `/brain/world_model` topic (RCAP branch
 `fused-world-model`).
 
+Known approximation: walking while turning drifts about 20 % from MuJoCo on a 2 m arc (the policy couples speed and turn
+rate; the kinematic robot does not). Straight walking and turning in place match closely.
+
 Realism knobs for both simulators: detection noise (with growth per metre), odometry drift, seed. 2D only: collisions, falls.
 
 ## Settings
