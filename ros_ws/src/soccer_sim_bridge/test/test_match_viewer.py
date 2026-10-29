@@ -35,7 +35,7 @@ class FakeViewer:
 
 def test_run_loop_mirrors_poses_to_the_viewer_model_and_input_back_to_the_sim():
     world_model = build_world(SimConfig(), 2)
-    world = SimpleNamespace(mj_data=mujoco.MjData(world_model), n_robot_ctrl=world_model.nu - 6)
+    world = SimpleNamespace(mj_data=mujoco.MjData(world_model), n_robot_ctrl=world_model.nu - 6, policy_dt=0.0)
     n = world.n_robot_ctrl
     world.mj_data.qpos[:] = world_model.qpos0
     mirror = LocalMirror(build_world(SimConfig(), 2, strip_visual=True), n, world.mj_data.ctrl[n:])
