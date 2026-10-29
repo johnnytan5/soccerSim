@@ -224,3 +224,46 @@ canvas { background: var(--bg); border: 1px solid var(--border-strong); border-r
 .match-actions { margin-top: 8px; }
 
 @media (max-width: 720px) { .teams { grid-template-columns: 1fr; } }
+
+/* ---- simulator choice, settings form ---- */
+.seg label.off span { opacity: .4; cursor: not-allowed; }
+fieldset.settings .btn-row { margin-bottom: 8px; }
+.settings-group { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--surface-2); }
+.settings-group > summary { cursor: pointer; padding: 8px 10px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.settings-group > summary .count { margin-left: auto; color: var(--accent); font-weight: 500; font-size: 12px; }
+.settings-group > .field { padding: 0 10px; }
+.settings-group > .field:last-child { margin-bottom: 10px; }
+.settings-group .field.set > label { color: var(--accent); font-weight: 600; }
+
+/* ---- grabbing a robot on the map ---- */
+#pitch .bot { cursor: grab; } #pitch .bot .hit { fill: transparent; pointer-events: all; }
+#pitch.grabbing, #pitch.grabbing .bot { cursor: grabbing; }
+
+/* ---- world model overlay (field map) and panel ---- */
+#pitch text.wm-label { fill: #fff; font-size: .4px; opacity: .95; paint-order: stroke; stroke: rgba(0, 0, 0, .65); stroke-width: .08; }
+#pitch text.wm-label.small { font-size: .3px; }
+#pitch .wm-fused { fill: #ffd24d; stroke: #111; stroke-width: .05; }
+#pitch .wm-fused.home { fill: var(--home); } #pitch .wm-fused.away { fill: var(--away); }
+#pitch .wm-fused-ellipse { fill: rgba(255, 210, 77, .16); stroke: #ffd24d; stroke-width: .05; }
+#pitch .wm-fused-ellipse.home { fill: rgba(77, 163, 255, .14); stroke: var(--home); } #pitch .wm-fused-ellipse.away { fill: rgba(255, 159, 67, .14); stroke: var(--away); }
+#pitch .wm-fused-arrow { stroke: #ffd24d; stroke-width: .07; fill: none; stroke-linecap: round; }
+#pitch .wm-stop { stroke: #ffd24d; stroke-width: .06; fill: none; }
+#pitch .wm-local { fill: none; stroke: #fff; stroke-width: .05; stroke-dasharray: .1 .08; }
+#pitch .wm-local-ellipse { fill: none; stroke: #fff; stroke-width: .03; stroke-dasharray: .15 .1; }
+#pitch .wm-local-arrow { stroke: #fff; stroke-width: .05; fill: none; stroke-dasharray: .1 .08; }
+#pitch .wm-src { stroke: #7ee787; fill: none; stroke-linecap: round; opacity: .85; }
+#pitch .wm-src.rejected { stroke: #f85149; stroke-dasharray: .15 .12; opacity: .9; }
+#pitch .wm-src-dot { fill: #7ee787; stroke: #111; stroke-width: .03; } #pitch .wm-src-dot.rejected { fill: #f85149; }
+#pitch .wm-reject { stroke: #f85149; stroke-width: .07; fill: none; stroke-linecap: round; }
+#pitch .wm-tm { fill: none; stroke-width: .04; stroke-dasharray: .12 .1; opacity: .9; }
+#pitch .wm-tm.home { stroke: var(--home); } #pitch .wm-tm.away { stroke: var(--away); }
+#pitch .wm-opp-fused { fill: #ff7b72; stroke: #fff; stroke-width: .05; } #pitch .wm-opp-fused.shared { fill: #d2a8ff; }
+#pitch .wm-opp-ellipse { fill: rgba(255, 123, 114, .12); stroke: #ff7b72; stroke-width: .03; }
+#pitch .wm-opp-arrow { stroke: #ff7b72; stroke-width: .06; fill: none; stroke-linecap: round; }
+#pitch .wm-opp-local { fill: none; stroke: #ff7b72; stroke-width: .05; }
+.wm-toggles { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; }
+.wm-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.wm-legend .k { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.wm-legend .k.fused { background: #ffd24d; } .wm-legend .k.local { border: 2px dashed #fff; } .wm-legend .k.src { background: #7ee787; }
+.wm-legend .k.tm { border: 2px dashed var(--home); } .wm-legend .k.opp { background: #ff7b72; border-radius: 2px; transform: rotate(45deg) scale(.8); }
+#wm-body .grid .v { display: flex; flex-wrap: wrap; gap: 4px; }

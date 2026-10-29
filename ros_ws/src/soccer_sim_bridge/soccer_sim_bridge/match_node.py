@@ -6,6 +6,7 @@ steps everybody together; one main loop publishes each robot's sensors into its 
 """
 
 import argparse
+import json
 import math
 import os
 import sys
@@ -36,6 +37,7 @@ from soccer_sim.placement import robot_pose_from_dict
 from soccer_sim.referee import STATES, name_of
 from soccer_sim.roster import PlayerSpec, roster_from_json, validate_roster
 from soccer_sim.shots import Shot, ShotPanel, shot_from_dict
+from soccer_sim.world_view import Ema, to_world, truth_errors
 from soccer_sim.backend import BACKENDS, load_backend, resolve_params, robot_rngs
 from soccer_sim.team_udp import TeamPacketCounter, team_port
 
@@ -205,6 +207,9 @@ class MatchBridge:
         self._fire_panel = False
         self._resets: dict[int, tuple[float, float, float]] = {}
         self._status: dict = {}
+        self._wm_cache: dict[int, tuple] = {}  # robot index -> (snapshot stamp, frame flipped, converted view)
+        self._wm_ema: dict[int, dict[str, Ema]] = {}
+        self._wm_status: dict = {"available": False, "robots": []}
         self.shot_panel = ShotPanel()
         self._log = lambda text: print(f"[match] {text}", flush=True)
         self.web: ControlServer | None = None
@@ -421,7 +426,42 @@ class MatchBridge:
                     joy = msg_conv.joystick_from_dict(press)
                 ch.joy_pub.publish(joy if joy is not None else msg_conv.joystick_from_dict({}))
 
+    def _wm_refresh(self, now: float) -> None:
+        """Each brain's world model (published on /brain/world_model, relayed by its gateway), moved into the world
+        frame and scored against the simulator's ground truth. Replaced wholesale so the HTTP thread never sees a
+        half-built structure."""
+        ball = self.world.ball_position()
+        poses = [ch.sim.robot_pose() for ch in self.channels]
+        robots_xy = [(ch.spec.team, p.x, p.y) for ch, p in zip(self.channels, poses)]
+        out = []
+        for ch, pose in zip(self.channels, poses):
+            got = self.shared.get_wm(ch.index)
+            if got is None:
+                continue
+            stamp, raw = got
+            flipped = ch.sim.frame.flipped
+            cached = self._wm_cache.get(ch.index)
+            if cached is None or cached[0] != stamp or cached[1] != flipped:
+                try:
+                    cached = (stamp, flipped, to_world(json.loads(raw), flipped))
+                except ValueError:
+                    continue
+                self._wm_cache[ch.index] = cached
+            view = dict(cached[2])
+            view.update(index=ch.index, team=ch.spec.team, player_id=ch.spec.player_id,
+                        label=f"{'H' if ch.spec.team == HOME else 'A'}{ch.spec.player_id}",
+                        stale=time.monotonic() - stamp > 2.0)
+            truth = truth_errors(view, (float(ball[0]), float(ball[1])), ch.spec.team, (pose.x, pose.y), robots_xy)
+            emas = self._wm_ema.setdefault(ch.index, {"local": Ema(), "fused": Ema()})
+            truth["local_ball_avg"] = emas["local"].update(truth["local_ball_err"])
+            truth["fused_ball_avg"] = emas["fused"].update(truth["fused_ball_err"])
+            view["truth"] = truth
+            out.append(view)
+        self._wm_status = {"available": bool(out), "robots": out}
+
     def _update_status(self, now: float) -> None:
+        if self.tick_count % 5 == 0:
+            self._wm_refresh(now)
         with self.lock:
             snap = self.gc.snapshot(now)
             ball = self.world.ball_position()
@@ -454,6 +494,7 @@ class MatchBridge:
                 "decision": sel["decision"], "shots": {"goal": 0, "no_goal": 0}, "last_shot": "",
                 "hz": round(self.tick_hz, 1),
                 "sim": self.backend.name, "seed": self.cfg.seed,
+                "worldmodel": self._wm_status,
             }
 
     def _packet_status(self) -> dict:
@@ -481,8 +522,17 @@ class MatchBridge:
         packets = self._packet_text()
         clock = "continuous" if st.get("continuous") else _fmt_clock(st.get("secs_remaining", 0))
         speed = float(np.linalg.norm(self.world.ball_velocity()))
+        wm = next((r for r in self._wm_status.get("robots", []) if r["index"] == self.selected), None)
+        if wm is None:
+            wm_ball, wm_pkt = "no world model", "-"
+        else:
+            fb, t = wm["fused_ball"], wm["truth"]
+            wm_ball = (f"fused ({fb['x']:.1f}, {fb['y']:.1f}) v {math.hypot(fb['vx'], fb['vy']):.1f} m/s +-{fb['smaj']:.2f} m"
+                       f"  err {t['fused_ball_err'] if t['fused_ball_err'] is not None else '-'}"
+                       f" (own camera {t['local_ball_err'] if t['local_ball_err'] is not None else '-'})") if fb.get("valid") else "ball unknown"
+            wm_pkt = f"{wm['packet'].get('bytes', '-')} B, {len(wm['opponents_fused'])} opponents fused"
         left = ["score", "clock", "referee", f"robot {self.selected}", "brain decision", "walk command", "ball speed",
-                "brain said", "packets", "sim rate"]
+                "brain said", "packets", "world model", "last packet", "sim rate"]
         right = [
             f"home {score.get(HOME, 0)} - {score.get(AWAY, 0)} away",
             f"{clock}   half {1 if st.get('first_half', True) else 2}",
@@ -493,6 +543,8 @@ class MatchBridge:
             f"{speed:.1f} m/s",
             event or "-",
             packets,
+            wm_ball,
+            wm_pkt,
             f"{self.tick_hz:.0f} Hz" + ("" if self.tick_hz >= 45 else "  (target 50, running slow)"),
         ]
         return "\n".join(left), "\n".join(right)

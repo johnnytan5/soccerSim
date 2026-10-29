@@ -222,3 +222,22 @@ def test_match_with_team_folders_builds_each_once_then_skips_until_changed(world
     assert jobs3.launch(cfg)["ok"]
     wait_idle(jobs3)
     assert [c[0][1] for c in runner3.calls] == ["scripts/setup_ws.sh", "scripts/run_match.sh"]  # only the team brain
+
+
+def test_state_offers_the_settings_of_the_rcap_checkout_and_the_competition_default(world):
+    import json
+
+    from soccer_launcher.config import DEFAULT_CONFIG
+    local, rcap, store, cfg = world
+    jobs = JobController(store, FakeRunner(local), local)
+    jobs.refresh(str(rcap))
+    state = jobs.static_state()
+    assert state["last"] == DEFAULT_CONFIG.to_dict() and state["default_config"] == DEFAULT_CONFIG.to_dict()
+    assert not any(s["source"] == "rcap" for s in state["settings"]) and jobs.snapshot()["settings_hash"] == ""
+    (rcap / "src/brain/config").mkdir()
+    (rcap / "src/brain/config/world_model.schema.json").write_text(json.dumps({"namespace": "world_model", "params": [
+        {"key": "enabled", "group": "general", "type": "bool", "default": True, "unit": "", "help": "on"}]}))
+    jobs.refresh(str(rcap))
+    state = jobs.static_state()
+    assert [s["key"] for s in state["settings"] if s["source"] == "rcap"] == ["world_model.enabled"]
+    assert jobs.snapshot()["settings_hash"]
