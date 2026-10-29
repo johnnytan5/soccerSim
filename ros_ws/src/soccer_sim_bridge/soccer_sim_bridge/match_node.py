@@ -16,7 +16,6 @@ from dataclasses import dataclass, field, replace
 import subprocess
 import tempfile
 
-import mujoco
 import numpy as np
 import rclpy
 from booster_interface.msg import LowState, Odometer, RemoteControllerState
@@ -27,7 +26,6 @@ from sensor_msgs.msg import CameraInfo, Image
 from vision_interface.msg import Detections, LineSegments
 
 from soccer_sim.config import SimConfig
-from soccer_sim.field import ROBOT_ACTUATOR_GROUP
 from soccer_sim.frames import TeamFrame
 from soccer_sim.game_controller import AWAY, HOME, SET_PLAYS, GameController, Goal, MatchCfg, PlaceBall, SwapSides
 from soccer_sim.joystick import FirmwareRemote, manual_velocity
@@ -38,13 +36,10 @@ from soccer_sim.placement import robot_pose_from_dict
 from soccer_sim.referee import STATES, name_of
 from soccer_sim.roster import PlayerSpec, roster_from_json, validate_roster
 from soccer_sim.shots import Shot, ShotPanel, shot_from_dict
-from soccer_sim.field import build_world
-from soccer_sim.sim import SoccerController, World
+from soccer_sim.backend import BACKENDS, load_backend, resolve_params, robot_rngs
 from soccer_sim.team_udp import TeamPacketCounter, team_port
-from soccer_sim.viewer_look import TEAM_RGBA, apply_look
 
 from . import gateway, msg_conv
-from .viewer_link import LocalMirror, ViewerLink
 from .web import ControlServer
 
 MODE_NAMES = {0: "damping", 1: "prepare", 2: "walking", 3: "custom", 4: "soccer"}
@@ -64,7 +59,7 @@ class Channel:
     index: int
     spec: PlayerSpec
     domain: int
-    sim: SoccerController
+    sim: object  # soccer_sim.sim.SoccerController or soccer_sim.kinematic.KinematicController
     loco: LocoState
     lock: threading.Lock
     shared: gateway.Shared
@@ -162,7 +157,8 @@ def _fmt_clock(secs: float) -> str:
 
 class MatchBridge:
     def __init__(self, roster: list[PlayerSpec], cfg: SimConfig, match: MatchCfg, domain_base: int,
-                 web_port: int, full_auto: bool, camera_every: int = 2, packet_budget: int = 60000):
+                 web_port: int, full_auto: bool, camera_every: int = 2, packet_budget: int = 60000,
+                 backend: str = "mujoco", kin_params=None):
         problems = validate_roster(roster)
         if problems:
             raise ValueError("; ".join(problems))
@@ -178,13 +174,17 @@ class MatchBridge:
         self.joystick_timeout = 0.5
         self.lock = threading.Lock()
         self.frames = {HOME: TeamFrame(False), AWAY: TeamFrame(True)}
-        self.world = World(cfg, len(roster))
+        if backend == "kinematic" and cfg.ball_detector == "yolo":
+            raise ValueError("the 2D simulator has no camera: use --ball-detector ground_truth")
+        self.backend = load_backend(backend)
+        self.world = self.backend.make_world(cfg, len(roster), kin_params)
+        rngs = robot_rngs(cfg.seed, len(roster))
         self._dir = tempfile.mkdtemp(prefix="soccer_sim_match_")
         self._state_path = os.path.join(self._dir, "state.bin")
         self.shared = gateway.Shared(self._state_path, len(roster), create=True)
         self.channels: list[Channel] = []
         for i, spec in enumerate(roster):
-            sim = SoccerController(cfg, self.world, i, self.frames[spec.team], spec.entry_pose())
+            sim = self.backend.make_robot(cfg, self.world, i, self.frames[spec.team], spec.entry_pose(), rngs[i])
             mode = MODE_PREPARE if full_auto else cfg.initial_mode
             self.shared.rows[i][gateway.MODE] = mode
             self.channels.append(Channel(i, spec, domain_base + i, sim, LocoState(mode=mode), self.lock, self.shared))
@@ -192,7 +192,7 @@ class MatchBridge:
         self._start_gateways(domain_base)
         self.full_auto = full_auto
         self.camera_every = max(1, camera_every)
-        self.use_camera = cfg.ball_detector == "yolo"
+        self.use_camera = cfg.ball_detector == "yolo" and backend == "mujoco"
         self.gc = GameController(match, time.monotonic())
         self.packet = 0
         self.last_touch: str | None = None
@@ -433,6 +433,7 @@ class MatchBridge:
                     "label": f"{'H' if ch.spec.team == HOME else 'A'}{ch.spec.player_id}",
                     "x": pose.x, "y": pose.y, "yaw": pose.yaw, "mode": ch.loco.mode, "decision": ch.decision,
                     "kicking": ch.loco.kicking(), "manual": ch.manual, "fallen": ch.sim.fallen(),
+                    "posture": getattr(ch.sim, "posture_name", "down" if ch.sim.fallen() else "standing"),
                 })
             sel = robots[min(self.selected, len(robots) - 1)]
             state = name_of(STATES, snap.state)
@@ -452,6 +453,7 @@ class MatchBridge:
                 "robot_mode": sel["mode"], "visual_kick": sel["kicking"], "manual_drive": sel["manual"],
                 "decision": sel["decision"], "shots": {"goal": 0, "no_goal": 0}, "last_shot": "",
                 "hz": round(self.tick_hz, 1),
+                "sim": self.backend.name, "seed": self.cfg.seed,
             }
 
     def _packet_status(self) -> dict:
@@ -528,14 +530,16 @@ class MatchBridge:
             pass
 
 
-def _run_realtime(bridge: MatchBridge, viewer, link: ViewerLink | None, profile_secs: float = 0.0,
-                  profile_file: str = "", mirror: LocalMirror | None = None) -> None:
+def _run_realtime(bridge: MatchBridge, viewer, link: "ViewerLink | None", profile_secs: float = 0.0,
+                  profile_file: str = "", mirror: "LocalMirror | None" = None) -> None:
+    if viewer is not None:
+        import mujoco  # only the in-process viewer (macOS) needs it
     profiler = None
     if profile_secs > 0:
         import cProfile
         profiler = cProfile.Profile()
     t_start, profiling = time.monotonic(), False
-    period = bridge.channels[0].sim.cfg.policy_dt
+    period = bridge.world.policy_dt
     next_t = time.monotonic()
     n_robot = bridge.world.n_robot_ctrl
     frame = 0
@@ -587,9 +591,15 @@ def _pick_camera_gl() -> None:
 
 
 def parse_args(argv):
-    p = argparse.ArgumentParser(description="Simulated match: several robots, a GameController, one MuJoCo world")
+    p = argparse.ArgumentParser(description="Simulated match: several robots, a GameController, one simulated world")
     p.add_argument("--roster", required=True, help="JSON list of {team, player_id, role}")
-    p.add_argument("--viewer", action="store_true")
+    p.add_argument("--viewer", action="store_true", help="MuJoCo viewer window (not with --sim-backend kinematic)")
+    p.add_argument("--sim-backend", choices=BACKENDS, default="mujoco",
+                   help="mujoco: MuJoCo physics; kinematic: the 2D simulator (no MuJoCo, no camera, browser map only)")
+    p.add_argument("--seed", type=int, default=None, help="fixes the noise / drift / fall random streams")
+    p.add_argument("--sim-param", action="append", default=[], metavar="NAME=VALUE",
+                   help="simulator setting: a SimConfig field (detection_noise_std, odom_drift_pct, ...) or a "
+                        "KinematicParams field (collisions, falls, ...); repeatable")
     p.add_argument("--domain-base", type=int, default=70, help="ROS domain of the first robot; the rest follow")
     p.add_argument("--ball-detector", choices=("yolo", "ground_truth"), default="ground_truth")
     p.add_argument("--start", choices=("quick", "full_auto"), default="quick")
@@ -610,20 +620,15 @@ def parse_args(argv):
     return p.parse_args(argv)
 
 
-def main(argv=None) -> None:
-    args = parse_args(sys.argv[1:] if argv is None else argv)
-    roster = roster_from_json(args.roster)
-    # Ten tiny walk policies on torch's default 8-thread pool spend more time spinning than computing.
-    import torch
-    torch.set_num_threads(1)
-    viewer_env = dict(os.environ)  # the viewer must not inherit the camera's software GL (see viewer_environment)
-    _pick_camera_gl()
-    cfg = SimConfig(ball_detector=args.ball_detector, ball_xy=(args.ball_x, args.ball_y))
-    match = MatchCfg(half_secs=args.half_minutes * 60.0, continuous=args.continuous, ready_secs=args.ready_secs,
-                     hold_initial=args.start == "full_auto",
-                     teams=tuple(t for t in (HOME, AWAY) if any(p.team == t for p in roster)))
-    bridge = MatchBridge(roster, cfg, match, args.domain_base, args.web_port, args.start == "full_auto",
-                         args.camera_every, args.packet_budget)
+def _run_mujoco(args, bridge: MatchBridge, cfg: SimConfig, roster, viewer_env) -> None:
+    """The MuJoCo backend's run loop: optionally with the 3D viewer, in-process on macOS or as a subprocess."""
+    import mujoco
+
+    from soccer_sim.field import ROBOT_ACTUATOR_GROUP, build_world
+    from soccer_sim.viewer_look import TEAM_RGBA, apply_look
+
+    from .viewer_link import LocalMirror, ViewerLink
+
     tints = {ch.sim.root_body_id: TEAM_RGBA[ch.spec.team] for ch in bridge.channels}
     w = bridge.world
     # The viewer copies its whole model on every sync, and ten robots' visual meshes are ~10 M triangles of it (66 ms a
@@ -654,11 +659,41 @@ def main(argv=None) -> None:
             _run_realtime(bridge, None, link, args.profile, args.profile_file)
         else:
             _run_realtime(bridge, None, None, args.profile, args.profile_file)
-    except KeyboardInterrupt:
-        pass
     finally:
         if link is not None:
             link.close()
+
+
+def main(argv=None) -> None:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    roster = roster_from_json(args.roster)
+    kinematic = args.sim_backend == "kinematic"
+    if kinematic and args.viewer:
+        raise SystemExit("--viewer needs the MuJoCo backend; the 2D simulator is shown on the browser map")
+    cfg = SimConfig(ball_detector=args.ball_detector, ball_xy=(args.ball_x, args.ball_y), seed=args.seed)
+    try:
+        cfg, kin_params = resolve_params(cfg, args.sim_param)
+    except ValueError as e:
+        raise SystemExit(str(e))
+    viewer_env = dict(os.environ)  # the viewer must not inherit the camera's software GL (see viewer_environment)
+    if not kinematic:
+        # Ten tiny walk policies on torch's default 8-thread pool spend more time spinning than computing.
+        import torch
+        torch.set_num_threads(1)
+        _pick_camera_gl()
+    match = MatchCfg(half_secs=args.half_minutes * 60.0, continuous=args.continuous, ready_secs=args.ready_secs,
+                     hold_initial=args.start == "full_auto",
+                     teams=tuple(t for t in (HOME, AWAY) if any(p.team == t for p in roster)))
+    bridge = MatchBridge(roster, cfg, match, args.domain_base, args.web_port, args.start == "full_auto",
+                         args.camera_every, args.packet_budget, args.sim_backend, kin_params)
+    try:
+        if kinematic:
+            _run_realtime(bridge, None, None, args.profile, args.profile_file)
+        else:
+            _run_mujoco(args, bridge, cfg, roster, viewer_env)
+    except KeyboardInterrupt:
+        pass
+    finally:
         bridge.close()
 
 

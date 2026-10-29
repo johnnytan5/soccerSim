@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .config import CameraCfg
-from .field import Segment
+from .field_geometry import Segment
 from .geometry import world_to_robot_2d
 
 MARKING_HALF_SIZE_M = 0.15
@@ -67,11 +67,13 @@ def _bbox(cam: Camera, u: float, v_top: float, v_bottom: float, half_w: float) -
     )
 
 
-def _robot_xy(robot: Pose2D, x: float, y: float, noise_std: float, rng) -> tuple[float, float]:
+def _robot_xy(robot: Pose2D, x: float, y: float, noise_std: float, rng, noise_gain: float = 0.0) -> tuple[float, float]:
+    """Position in the robot frame with Gaussian noise of sigma = noise_std + noise_gain * range (far is noisier)."""
     rx, ry = world_to_robot_2d(x, y, robot.x, robot.y, robot.yaw)
-    if noise_std > 0.0 and rng is not None:
-        rx += float(rng.normal(0.0, noise_std))
-        ry += float(rng.normal(0.0, noise_std))
+    sigma = noise_std + noise_gain * math.hypot(rx, ry)
+    if sigma > 0.0 and rng is not None:
+        rx += float(rng.normal(0.0, sigma))
+        ry += float(rng.normal(0.0, sigma))
     return rx, ry
 
 
@@ -79,7 +81,7 @@ def _in_range(robot: Pose2D, x: float, y: float, max_range: float) -> bool:
     return math.hypot(x - robot.x, y - robot.y) <= max_range
 
 
-def detect_ball(cam, robot, ball_w, radius, max_range, noise_std=0.0, rng=None) -> Detection | None:
+def detect_ball(cam, robot, ball_w, radius, max_range, noise_std=0.0, rng=None, noise_gain=0.0) -> Detection | None:
     bx, by, bz = (float(v) for v in ball_w)
     if not _in_range(robot, bx, by, max_range):
         return None
@@ -89,11 +91,11 @@ def detect_ball(cam, robot, ball_w, radius, max_range, noise_std=0.0, rng=None) 
     u, v, depth = p
     half_u, half_v = cam.fx * radius / depth, cam.fy * radius / depth
     return Detection(
-        "Ball", CONFIDENCE, _bbox(cam, u, v - half_v, v + half_v, half_u), _robot_xy(robot, bx, by, noise_std, rng)
+        "Ball", CONFIDENCE, _bbox(cam, u, v - half_v, v + half_v, half_u), _robot_xy(robot, bx, by, noise_std, rng, noise_gain)
     )
 
 
-def detect_goalposts(cam, robot, posts, height, radius, max_range, noise_std=0.0, rng=None) -> list[Detection]:
+def detect_goalposts(cam, robot, posts, height, radius, max_range, noise_std=0.0, rng=None, noise_gain=0.0) -> list[Detection]:
     out = []
     for gx, gy in posts:
         if not _in_range(robot, gx, gy, max_range):
@@ -109,7 +111,7 @@ def detect_goalposts(cam, robot, posts, height, radius, max_range, noise_std=0.0
                 "Goalpost",
                 CONFIDENCE,
                 _bbox(cam, u, v_top, v_bottom, cam.fx * radius / depth),
-                _robot_xy(robot, gx, gy, noise_std, rng),
+                _robot_xy(robot, gx, gy, noise_std, rng, noise_gain),
             )
         )
     return out
@@ -119,7 +121,7 @@ ROBOT_HEIGHT_M = 1.15  # T2 standing height
 ROBOT_HALF_WIDTH_M = 0.25
 
 
-def detect_robots(cam, robot, others_xy, max_range, noise_std=0.0, rng=None) -> list[Detection]:
+def detect_robots(cam, robot, others_xy, max_range, noise_std=0.0, rng=None, noise_gain=0.0) -> list[Detection]:
     """Other robots as brain's 'Opponent' objects: the real model cannot tell teammates from opponents either.
 
     others_xy are positions in the same frame as `cam` and `robot`; the robot itself is not in the list.
@@ -145,13 +147,13 @@ def detect_robots(cam, robot, others_xy, max_range, noise_std=0.0, rng=None) -> 
                 "Opponent",
                 CONFIDENCE,
                 _bbox(cam, u, min(v_head, v_feet), max(v_head, v_feet), cam.fx * ROBOT_HALF_WIDTH_M / feet[2]),
-                _robot_xy(robot, ox, oy, noise_std, rng),
+                _robot_xy(robot, ox, oy, noise_std, rng, noise_gain),
             )
         )
     return out
 
 
-def detect_markings(cam, robot, markings, max_range, noise_std=0.0, rng=None) -> list[Detection]:
+def detect_markings(cam, robot, markings, max_range, noise_std=0.0, rng=None, noise_gain=0.0) -> list[Detection]:
     out = []
     for label, mx, my in markings:
         if not _in_range(robot, mx, my, max_range):
@@ -166,7 +168,7 @@ def detect_markings(cam, robot, markings, max_range, noise_std=0.0, rng=None) ->
                 label,
                 CONFIDENCE,
                 _bbox(cam, u, v - half_v, v + half_v, half_u),
-                _robot_xy(robot, mx, my, noise_std, rng),
+                _robot_xy(robot, mx, my, noise_std, rng, noise_gain),
                 target_uv=(u, v),
             )
         )
@@ -220,3 +222,21 @@ def visible_lines(cam, robot, segments: list[Segment], max_range: float, step: f
         pb = (c * (bx - robot.x) + s * (by - robot.y), -s * (bx - robot.x) + c * (by - robot.y))
         out.append(LineObs((pa[0], pa[1], pb[0], pb[1]), (float(u[a]), float(v[a]), float(u[b]), float(v[b]))))
     return out
+
+
+def perceive_ground_truth(cam, robot, ball_xyz, others_xy, posts, markings, lines, cfg, rng) -> tuple[list, list]:
+    """What the head camera reports with ground-truth detectors (no rendering), everything in the robot's team frame.
+
+    cfg: SimConfig. others_xy: every other robot, seen as 'Opponent' like the real model does.
+    """
+    gain = cfg.detection_noise_range_gain
+    dets: list[Detection] = []
+    ball = detect_ball(cam, robot, ball_xyz, cfg.ball_radius, cfg.max_ball_range, cfg.detection_noise_std, rng, gain)
+    if ball is not None:
+        dets.append(ball)
+    dets += detect_goalposts(cam, robot, posts, cfg.goal_height, cfg.goalpost_radius, cfg.max_goalpost_range,
+                             cfg.detection_noise_std, rng, gain)
+    dets += detect_markings(cam, robot, markings, cfg.max_marking_range, cfg.detection_noise_std, rng, gain)
+    if others_xy:
+        dets += detect_robots(cam, robot, others_xy, cfg.max_ball_range, cfg.detection_noise_std, rng, gain)
+    return dets, visible_lines(cam, robot, lines, cfg.max_line_range)

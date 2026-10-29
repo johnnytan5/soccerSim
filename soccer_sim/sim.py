@@ -49,6 +49,7 @@ class World:
         self.mj_model.opt.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
         self.mj_data = mujoco.MjData(self.mj_model)
         self.decimation = task.mujoco.decimation
+        self.policy_dt = task.policy_dt
         self.n_robot_ctrl = n_robots * len(task.robot.joint_names)  # robot motors are ctrl[:n]; shot sliders follow
         self._sliders = {name: self.mj_model.actuator(name).id for name, *_ in SHOT_SLIDERS}
         for name, _lo, _hi, default in SHOT_SLIDERS:
@@ -149,7 +150,7 @@ class SoccerController(BaseController):
     """
 
     def __init__(self, sim_cfg: SimConfig, world: World | None = None, index: int = 0,
-                 frame: TeamFrame | None = None, spawn: tuple[float, float, float] | None = None):
+                 frame: TeamFrame | None = None, spawn: tuple[float, float, float] | None = None, rng=None):
         cfg = T2WalkTaskCfg()
         cfg.policy.enable_safety_fallback = False
         super().__init__(cfg)
@@ -195,10 +196,10 @@ class SoccerController(BaseController):
         self.kick_model = VisualKickModel()
         self._was_kicking = False
         self.yolo = self.world.yolo
-        self._rng = np.random.default_rng()
+        self._rng = rng if rng is not None else np.random.default_rng(sim_cfg.seed)
 
         sx, sy, syaw = spawn if spawn is not None else sim_cfg.spawn_xy_yaw
-        self.odometry = OdometryTracker(Pose2D(sx, sy, syaw))
+        self.odometry = self._new_odometry(Pose2D(sx, sy, syaw))
         self.reset_robot(*self.frame.pose_tuple(sx, sy, syaw))
 
     # ---- resets -------------------------------------------------------------
@@ -217,7 +218,11 @@ class SoccerController(BaseController):
 
     def restart_odometry(self) -> None:
         """Brain was picked up and put down: its odometer starts again from where the robot now stands."""
-        self.odometry = OdometryTracker(self.team_pose())
+        self.odometry = self._new_odometry(self.team_pose())
+
+    def _new_odometry(self, origin: Pose2D) -> OdometryTracker:
+        c = self.sim_cfg
+        return OdometryTracker(origin, c.odom_drift_pct, c.odom_yaw_drift_deg, self._rng)
 
     def reset_ball(self, x: float, y: float) -> None:
         self.world.reset_ball(x, y)
@@ -372,17 +377,20 @@ class SoccerController(BaseController):
         else:
             bx, by = self.frame.point(*self.ball_position()[:2])
             ball = detect_ball(
-                cam, robot, (bx, by, self.ball_position()[2]), c.ball_radius, c.max_ball_range, c.detection_noise_std, rng
+                cam, robot, (bx, by, self.ball_position()[2]), c.ball_radius, c.max_ball_range, c.detection_noise_std, rng,
+                c.detection_noise_range_gain
             )
             if ball is not None:
                 dets.append(ball)
         dets += detect_goalposts(
-            cam, robot, self._posts, c.goal_height, c.goalpost_radius, c.max_goalpost_range, c.detection_noise_std, rng
+            cam, robot, self._posts, c.goal_height, c.goalpost_radius, c.max_goalpost_range, c.detection_noise_std, rng,
+            c.detection_noise_range_gain
         )
-        dets += detect_markings(cam, robot, self._markings, c.max_marking_range, c.detection_noise_std, rng)
+        dets += detect_markings(cam, robot, self._markings, c.max_marking_range, c.detection_noise_std, rng,
+                                c.detection_noise_range_gain)
         if others:
             dets += detect_robots(cam, robot, [self.frame.point(x, y) for x, y in others], c.max_ball_range,
-                                  c.detection_noise_std, rng)
+                                  c.detection_noise_std, rng, c.detection_noise_range_gain)
         return dets, visible_lines(cam, robot, self._lines, c.max_line_range)
 
     def render(self) -> tuple[np.ndarray, np.ndarray]:

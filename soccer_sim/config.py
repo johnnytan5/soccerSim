@@ -82,6 +82,13 @@ class SimConfig:
     render_shadows: bool = False
     # ponytail: ground-truth goalposts/markings/lines are perfect; raise to emulate vision noise.
     detection_noise_std: float = 0.0
+    # sigma = detection_noise_std + detection_noise_range_gain * range: far objects are noisier
+    detection_noise_range_gain: float = 0.0
+    # Odometer error (both simulators): position error as % of the distance walked, heading error in degrees per
+    # 10 m walked. A bias is drawn once per robot; noise accumulates with distance, so a standing robot stays put.
+    odom_drift_pct: float = 0.0
+    odom_yaw_drift_deg: float = 0.0
+    seed: int | None = None  # fixes every random stream (noise, drift, falls); None = fresh each run
     ball_detector: str = "yolo"  # "yolo" (real model on rendered frames) | "ground_truth"
     yolo_model_path: str = DEFAULT_YOLO_MODEL
     yolo_ball_conf: float = 0.4  # vision.yaml post_process.confidence_thresholds.Ball
