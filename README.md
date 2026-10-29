@@ -347,6 +347,34 @@ initialiser, change `bind` to `::bind`), then refresh the patch.
 If the team recalibrates the camera, `tests/test_field.py::test_camera_defaults_match_team_vision_yaml`
 fails until `CameraCfg` in `soccer_sim/config.py` is updated to match.
 
+## 2D simulator, world-model settings and the Competition default
+
+`pixi run launch` opens the Control Centre with the **Competition** preset selected: 5v5, real match procedure, two
+10-minute halves, 60000-packet budget, team comms at 3 Hz, noisy perception. Every field can be changed.
+
+**Simulator.** Under Match, choose **2D (browser)** or **MuJoCo 3D**.
+
+- *2D* runs the real brains, UDP team comms, GameController and packet budget on a lightweight kinematic simulator
+  (`soccer_sim/kinematic*.py`). No MuJoCo, no viewer window, no camera (ground-truth detections), real time only. The page
+  switches to the Control tab, where you watch the robots, **drag a robot** to a new spot (press it and move; a plain click
+  selects), place the ball, and drive with the sticks. Match mode only. It models acceleration-limited walking (constants
+  measured from the walk policy, `pixi run calibrate-kinematics`), ball rolling friction and bounce, robot-ball pushes, robot
+  collisions, falls with a get-up delay, odometry drift and range-dependent detection noise, all seedable.
+- *MuJoCo 3D* is the physics simulator as before (viewer window optional).
+
+**Settings.** The form's Settings section drives each brain's ROS parameters (a blank field leaves `config.yaml`'s value):
+the team-comms and tracking knobs, the simulator's realism knobs, and every `world_model.*` parameter of the RCAP checkout,
+read from its `config/world_model.schema.json` (so a new parameter in the brain's C++ table appears without launcher
+changes). A checkout without the file simply has no world-model settings. Brain settings apply to matches only.
+
+**World model view.** The Control tab's World model card shows what each brain believes, on the map and in numbers, for
+both simulators: the fused ball (95 % ellipse, velocity, where it will stop), each robot's contribution and weight, own
+camera ball, predicted teammates, own and fused opponent tracks, and packet bytes; with errors against the simulator's ground
+truth. Pick a robot or "All" and toggle layers. The data is each brain's `/brain/world_model` topic (RCAP branch
+`fused-world-model`).
+
+Realism knobs for both simulators: detection noise (with growth per metre), odometry drift, seed. 2D only: collisions, falls.
+
 ## Settings
 
 | Setting | How to change it | Default |
