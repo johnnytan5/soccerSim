@@ -31,6 +31,7 @@ from soccer_sim.frames import TeamFrame
 from soccer_sim.game_controller import AWAY, HOME, SET_PLAYS, GameController, Goal, MatchCfg, PlaceBall, SwapSides
 from soccer_sim.joystick import FirmwareRemote, manual_velocity
 from soccer_sim.kick_model import KickRef
+from soccer_sim.metrics import MetricsRecorder, RobotSample, Sample
 from soccer_sim.loco_rpc import MODE_DAMPING, MODE_PREPARE, MODE_SOCCER, LocoState
 from soccer_sim.packet_budget import PacketBudget
 from soccer_sim.placement import robot_pose_from_dict
@@ -210,6 +211,15 @@ class MatchBridge:
         self._wm_cache: dict[int, tuple] = {}  # robot index -> (snapshot stamp, frame flipped, converted view)
         self._wm_ema: dict[int, dict[str, Ema]] = {}
         self._wm_status: dict = {"available": False, "robots": []}
+        self.recorder: MetricsRecorder | None = None  # set by --metrics-out
+        self.metrics_out = ""
+        self.metrics_secs = 0.0
+        self.metrics_meta: dict = {}
+        self.play_flag = ""  # --play-flag: written once, when the first PLAY sample is recorded (the batch runner polls it)
+        self.blackout_file = ""  # --blackout-file: {"start": wall, "end": wall|null} written by the batch runner
+        self._blackout: tuple[float, float | None] | None = None
+        self._blackout_read = 0.0
+        self.finished = False  # the metrics run reached its PLAY time: the run loops stop
         self.shot_panel = ShotPanel()
         self._log = lambda text: print(f"[match] {text}", flush=True)
         self.web: ControlServer | None = None
@@ -496,6 +506,70 @@ class MatchBridge:
                 "sim": self.backend.name, "seed": self.cfg.seed,
                 "worldmodel": self._wm_status,
             }
+        if self.recorder is not None and self.tick_count % 2 == 0 and not self.finished:
+            self._record_metrics(now)
+
+    def enable_metrics(self, path: str, play_secs: float, meta: dict) -> None:
+        """Record match metrics (soccer_sim.metrics); write `path` and set `finished` after `play_secs` of PLAY."""
+        self.recorder, self.metrics_out, self.metrics_secs, self.metrics_meta = MetricsRecorder(), path, play_secs, meta
+
+    def _record_metrics(self, now: float) -> None:
+        st = self._status
+        views = {v["index"]: v for v in self._wm_status.get("robots", [])}
+        robots = []
+        for r in st["robots"]:
+            v = views.get(r["index"])
+            fresh = v is not None and not v.get("stale")
+            truth = v.get("truth", {}) if fresh else {}
+            brain = v.get("brain") or {} if fresh else {}
+            robots.append(RobotSample(
+                r["label"], r["team"], r["x"], r["y"], r["yaw"], r["decision"],
+                keeper=r["role"] == "goal_keeper" or self.roster[r["index"]].player_id == 1,
+                comm_mode=v.get("comm_mode") if fresh else None,
+                fused_err=truth.get("fused_ball_err"), local_err=truth.get("local_ball_err"),
+                role=brain.get("player_role"), rank=brain.get("outfield_rank"), im_lead=brain.get("im_lead"),
+                role_own_view=brain.get("role_own_view")))
+        playing = st["state"] == "PLAYING" and not st["stopped"]
+        if playing and self.play_flag and not os.path.exists(self.play_flag):
+            self._write_json_atomic(self.play_flag, {"wall": time.time(), "sim_t": self.tick_count * self.world.policy_dt})
+        self.recorder.add(Sample(self.tick_count * self.world.policy_dt, playing, (st["ball"]["x"], st["ball"]["y"]), robots,
+                                 blackout=playing and self._in_blackout()))
+        if self.recorder.play_s >= self.metrics_secs or st["state"] == "FINISHED":
+            self._write_metrics()
+
+    @staticmethod
+    def _write_json_atomic(path: str, doc: dict) -> None:
+        tmp = f"{path}.tmp"
+        with open(tmp, "w") as f:
+            json.dump(doc, f)
+        os.replace(tmp, path)
+
+    def _in_blackout(self) -> bool:
+        """Wall-clock window the batch runner wrote to --blackout-file (it applies the netem blackout itself)."""
+        if not self.blackout_file:
+            return False
+        now = time.time()
+        if now - self._blackout_read > 0.2:  # re-read a few times a second, not every sample
+            self._blackout_read = now
+            try:
+                with open(self.blackout_file) as f:
+                    d = json.load(f)
+                self._blackout = (float(d["start"]), None if d.get("end") is None else float(d["end"]))
+            except (OSError, ValueError, KeyError, TypeError):
+                pass  # absent or mid-write: keep the last known window
+        if self._blackout is None:
+            return False
+        start, end = self._blackout
+        return now >= start and (end is None or now < end)
+
+    def _write_metrics(self) -> None:
+        score = dict(self.gc.score)
+        doc = {"meta": self.metrics_meta, "score": {"home": score.get(HOME, 0), "away": score.get(AWAY, 0)},
+               "tick_hz_last": round(self.tick_hz, 1), **self.recorder.summary()}
+        with open(self.metrics_out, "w") as f:
+            json.dump(doc, f, indent=1)
+        self._log(f"metrics written to {self.metrics_out}")
+        self.finished = True
 
     def _packet_status(self) -> dict:
         counting = self.packet_counter.active
@@ -595,7 +669,7 @@ def _run_realtime(bridge: MatchBridge, viewer, link: "ViewerLink | None", profil
     next_t = time.monotonic()
     n_robot = bridge.world.n_robot_ctrl
     frame = 0
-    while (viewer is None or viewer.is_running()) and (link is None or link.is_running()):
+    while (viewer is None or viewer.is_running()) and (link is None or link.is_running()) and not getattr(bridge, "finished", False):
         if link is not None:
             bridge.world.mj_data.ctrl[n_robot:] = link.sliders()
             bridge.world.mj_data.xfrc_applied[:] = link.xfrc()
@@ -669,6 +743,11 @@ def parse_args(argv):
     p.add_argument("--profile", type=float, default=0.0, metavar="SECS",
                    help="profile the main loop for this long after 20 s, print the hot spots (to stderr, or --profile-file)")
     p.add_argument("--profile-file", default="")
+    p.add_argument("--metrics-out", default="", help="write match metrics (JSON) here and exit after --metrics-play-secs of PLAY")
+    p.add_argument("--metrics-play-secs", type=float, default=60.0, help="PLAY seconds (simulated) to record")
+    p.add_argument("--play-flag", default="", help="file written when PLAY first starts (the batch runner polls it)")
+    p.add_argument("--blackout-file", default="", help="JSON {start,end} (wall clock) of a runner-applied blackout window")
+    p.add_argument("--metrics-meta", default="{}", help="JSON object copied into the metrics file")
     return p.parse_args(argv)
 
 
@@ -738,6 +817,9 @@ def main(argv=None) -> None:
                      teams=tuple(t for t in (HOME, AWAY) if any(p.team == t for p in roster)))
     bridge = MatchBridge(roster, cfg, match, args.domain_base, args.web_port, args.start == "full_auto",
                          args.camera_every, args.packet_budget, args.sim_backend, kin_params)
+    if args.metrics_out:
+        bridge.enable_metrics(args.metrics_out, args.metrics_play_secs, json.loads(args.metrics_meta))
+        bridge.play_flag, bridge.blackout_file = args.play_flag, args.blackout_file
     try:
         if kinematic:
             _run_realtime(bridge, None, None, args.profile, args.profile_file)

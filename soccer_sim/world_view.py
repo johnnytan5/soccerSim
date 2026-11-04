@@ -30,7 +30,7 @@ def _flip_xy(d: dict, flipped: bool) -> dict:
 def to_world(snapshot: dict, flipped: bool) -> dict:
     """The snapshot in the world frame. `flipped` is the robot's TeamFrame.flipped (the away team, or any team after
     half-time)."""
-    out = {k: snapshot[k] for k in ("schema_version", "player", "enabled", "method", "t") if k in snapshot}
+    out = {k: snapshot[k] for k in ("schema_version", "player", "enabled", "method", "t", "comm_mode") if k in snapshot}
     out["pose"] = _flip_xy(snapshot.get("pose", {}), flipped)
     local = snapshot.get("local_ball", {})
     out["local_ball"] = _flip_xy(local, flipped)
@@ -42,6 +42,10 @@ def to_world(snapshot: dict, flipped: bool) -> dict:
     out["opponents_fused"] = [
         {**_flip_xy(o, flipped), "sources": [_flip_xy(m, flipped) for m in o.get("sources", [])]}
         for o in snapshot.get("opponents_fused", [])]
+    if "brain" in snapshot:  # the brain's role signals (player_role, outfield_rank, im_lead, ball_owner_id, role_own_view)
+        out["brain"] = snapshot["brain"]
+    if "links" in snapshot:
+        out["links"] = snapshot["links"]
     out["counters"] = snapshot.get("counters", {})
     out["packet"] = snapshot.get("packet", {})
     return out

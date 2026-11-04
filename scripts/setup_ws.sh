@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PACKAGES="${PACKAGES:-brain}"
-# SS_WS_DIR: colcon workspace to build into (default ros_ws). The launcher builds one per team brain folder (ros_ws_brains/<name>).
+# SS_WS_DIR: colcon workspace to build into (default ros_ws). The launcher builds one per team brain folder (ros_ws_brains/<name>); scripts/batch_matches.py builds ros_ws_baseline.
 WS="${SS_WS_DIR:-$ROOT/ros_ws}"
 SRC="$WS/src"
 # ROBOTEDGE_ROOT comes from scripts/activate.sh (run through `pixi run`).

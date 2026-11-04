@@ -18,3 +18,4 @@ MUJOCO_LOG.TXT
 .launcher/
 ros_ws_brains/
 .env
+ros_ws_baseline/
