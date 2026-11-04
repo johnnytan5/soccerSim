@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 
-from . import build, command, rcap
+from . import build, command, netns, rcap
 from .config import DEFAULT_CONFIG
 from . import settings
 from .env import load_dotenv
@@ -35,8 +35,9 @@ def _relaunch_last() -> int:
         if subprocess.call(build.BUILD_ARGV, cwd=cwd, env={**os.environ, **build.BUILD_ENV, **env_root}) != 0:
             return 1
         build.write_stamp(root, status.fingerprint, store.dir)
-    argv, env = command.build_command(cfg, str(root))
-    return subprocess.call(argv, cwd=cwd, env={**os.environ, **env})
+    with netns.session(cfg, print) as run_cfg:
+        argv, env = command.build_command(run_cfg, str(root))
+        return subprocess.call(argv, cwd=cwd, env={**os.environ, **env})
 
 
 DEFAULT_PORT = 8765

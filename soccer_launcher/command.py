@@ -5,7 +5,7 @@ import json
 import shlex
 from pathlib import Path
 
-from . import brains
+from . import brains, netns
 from . import settings as setting_registry
 from .config import DEFAULT_DOMAIN_BASE, LaunchConfig
 
@@ -66,8 +66,13 @@ def _match_command(cfg: LaunchConfig, web_port: int | None, registry,
     for team, folder in folders.items():  # per-team brain; absent = same command as before
         argv += [f"{team}_brain_install:={brains.install_dir(folder, local_root)}", f"{team}_brain_root:={folder}"]
     brain = setting_registry.brain_overrides(cfg.settings, registry)
+    launch_extra: dict[str, str] = {}
+    if netns.active(cfg):  # brains in namespaces: the team broadcast must leave through the veth (br-sim)
+        launch_extra, net_brain = netns.brain_extras(cfg)
+        brain = {**net_brain, **brain}  # an explicit setting still wins
     if brain:  # only when set, so a config without settings builds the same command as before
         argv.append("brain_params:=" + json.dumps(brain, separators=(",", ":"), sort_keys=True))
+    argv += [f"{k}:={v}" for k, v in launch_extra.items()]
     argv += shlex.split(cfg.extra_launch_args)
     env = {"MATCH_ARGS": shlex.join(match_args(cfg, web_port, registry))}
     if folders:  # run_match.sh overlays these workspaces on ros_ws

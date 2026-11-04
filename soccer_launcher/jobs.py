@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
-from . import brains, build, command, preflight, rcap, settings
+from . import brains, build, command, netns, preflight, rcap, settings
 from .config import DEFAULT_CONFIG, PRESETS, LaunchConfig
 from .rcap import RcapInfo
 from .runner import TOOLS, TOOLS_BY_KEY, Runner
@@ -233,12 +233,13 @@ class JobController:
             if self._stop_requested:
                 return
             port = self._pick_port()
-            argv, env = command.build_command(cfg, str(info.root), port, self.local_root)
-            with self._cond:
-                self._bridge_port = port
-            self._set_state("running", "sim")
-            self.log("$ " + " ".join(argv))
-            code = self.runner.run(argv, env, self.log)
+            with netns.session(cfg, self.log) as run_cfg:  # namespaces torn down again however the sim ends
+                argv, env = command.build_command(run_cfg, str(info.root), port, self.local_root)
+                with self._cond:
+                    self._bridge_port = port
+                self._set_state("running", "sim")
+                self.log("$ " + " ".join(argv))
+                code = self.runner.run(argv, env, self.log)
             self.log("sim stopped" if self._stop_requested else f"sim exited with code {code}")
         except Exception as e:  # surface instead of dying silently on the worker thread
             self.log(f"launcher error: {type(e).__name__}: {e}")

@@ -6,6 +6,7 @@ home_brain_install / away_brain_install: colcon install dir of another brain bui
              sourced one). Its brain_node is run by absolute path; the rest of the environment is shared.
 home_brain_root / away_brain_root: Robotedge checkout whose config.yaml, behaviour trees and vision config that team's
              brains use (empty = $ROBOTEDGE_ROOT). Set together with the install dir for a head-to-head match.
+netns:       "true" runs robot i's brain inside network namespace ss-r{i+1} (scripts/netem.sh up, scripts/ns_exec.sh).
 brain_params: JSON object of extra ROS parameter overrides for every brain (dotted names, typed values), e.g.
              {"communication.team_broadcast_rate_hz": 3.0, "world_model.fusion.method": "ci"}. Wins over
              enable_com:= and config.yaml. The launcher builds it from its settings.
@@ -41,6 +42,8 @@ def _brains(context):
     for team in ("home", "away"):
         team_cfg[team] = team_brain(team, LaunchConfiguration(f"{team}_brain_install").perform(context),
                                     LaunchConfiguration(f"{team}_brain_root").perform(context), default_root)
+    use_netns = LaunchConfiguration("netns").perform(context).lower() == "true"  # scripts/netem.sh namespaces are up
+    ns_exec = os.path.join(os.environ.get("SOCCER_SIM_ROOT", os.getcwd()), "scripts", "ns_exec.sh")
     extra = json.loads(LaunchConfiguration("brain_params").perform(context) or "{}")
     if not isinstance(extra, dict):
         raise ValueError("brain_params must be a JSON object")
@@ -72,6 +75,8 @@ def _brains(context):
                 output="screen",
                 parameters=[os.path.join(brain_dir, "config", "config.yaml"), overrides],
                 additional_env={"ROS_DOMAIN_ID": str(base + i)},
+                # robot i runs in network namespace ss-r{i+1}, as the same user with the same environment
+                prefix=f"bash {ns_exec} ss-r{i + 1}" if use_netns else None,
             )
         )
     return nodes
@@ -90,6 +95,7 @@ def generate_launch_description():
             DeclareLaunchArgument("home_brain_root", default_value=""),
             DeclareLaunchArgument("away_brain_root", default_value=""),
             DeclareLaunchArgument("brain_params", default_value="{}"),
+            DeclareLaunchArgument("netns", default_value="false"),
             OpaqueFunction(function=_brains),
         ]
     )

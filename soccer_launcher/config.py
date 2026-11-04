@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field, fields
 
 from soccer_sim.roster import AWAY, HOME, PlayerSpec, standard_team, validate_roster
 
-from . import settings as setting_registry
+from . import netns, settings as setting_registry
 
 ROLES = ("goal_keeper", "striker", "defender")
 TREES = ("game.xml", "chase.xml", "demo.xml")
@@ -41,6 +41,11 @@ class LaunchConfig:
     continuous: bool = False  # no halves or clock limit
     detailed_bodies: bool = False  # viewer: real T2 meshes instead of simple team-coloured bodies (slow with many robots)
     packet_budget: int = 60000  # UDP packets each team may send per match, as in RCAP (0 = no limit); over it the score is zeroed
+    # Network profile (matches): "none" = today's behaviour; otherwise each brain runs in its own namespace behind
+    # scripts/netem.sh with the team channel impaired. overrides: "home3=terrible,away2=blackout:10".
+    network_profile: str = "none"
+    network_overrides: str = ""
+    network_ingress: bool = False  # impair each receiver's link independently (ifb) instead of the sender's
     # Perception
     ball_detector: str = "yolo"
     # Field & referee (empty/None = bridge default)
@@ -84,6 +89,7 @@ class LaunchConfig:
             if self.ball_detector != "ground_truth":
                 errs.append("the 2D simulator has no camera: use the ground-truth ball detector")
         errs += setting_registry.validate(self.settings, registry if registry is not None else list(setting_registry.STATIC))
+        errs += netns.validate(self)
         if self.is_match:
             errs += self._validate_match()
         elif self.role not in ROLES:

@@ -15,6 +15,7 @@ if [ -n "${SS_WS_DIR:-}" ]; then
   done
 fi
 set -u
+export SOCCER_SIM_ROOT="$ROOT"  # match.launch.py finds scripts/ns_exec.sh through it
 
 PY=python
 VIEWER_PY=python

@@ -40,7 +40,7 @@ const DEFAULTS = {role: "goal_keeper", player_id: 1, tree: "game.xml", match_mod
   spawn_x: null, spawn_y: null, spawn_yaw: null, ball_x: null, ball_y: null, referee_schedule: "", rcap_root: "",
   sim_vy_max: null, camera_gl: "auto", mujoco_gl: "", ros_domain_id: null, extra_bridge_args: "", extra_launch_args: "",
   home_brain_root: "", away_brain_root: "",
-  players: [], half_minutes: 10, continuous: false, detailed_bodies: false, graphics: "gpu", packet_budget: 60000};
+  players: [], half_minutes: 10, continuous: false, detailed_bodies: false, graphics: "gpu", packet_budget: 60000, network_profile: "none", network_overrides: "", network_ingress: false};
 const S = {
   cfg: {...DEFAULTS}, parseErrors: {}, srv: null, static: null, check: null, checkSeq: 0, checkTimer: null,
   ready: false, status: {}, lastShot: "", cur: "", autoSwitched: false, lastState: "idle", sel: 0, lastRoster: null,
@@ -81,6 +81,11 @@ const FIELDS = [
     {k: "packet_budget", label: "Packet budget per team", type: "num", int: true, ph: "60000", show: isMatch, help: c => c.packet_budget === 0
       ? "No limit: each team's UDP packets are still counted and shown."
       : `UDP packets each team may send in the whole match (RCAP: 60000, discovery and state both count). Over it the team's score is zeroed. Blank = 60000, 0 = no limit.`},
+    {k: "network_profile", label: "Network profile", type: "select", opts: ["none", "good", "rcap_bad", "terrible", "blackout:10"], show: isMatch, help: c => c.network_profile === "none"
+      ? "Default: brains share the host network, team packets are not impaired."
+      : "Each brain runs in its own network namespace behind a bridge (needs passwordless sudo, Linux); the team UDP channel gets netem delay/loss. rcap_bad ~150 ms +-120 ms, ~15% bursty loss; terrible 600 ms, 40%; blackout:T cuts a robot for T seconds. Falls back to none if unsupported."},
+    {k: "network_overrides", label: "Per-robot profile", type: "text", ph: "home3=terrible,away2=blackout:10", show: c => isMatch(c) && c.network_profile !== "none", help: () => "Overrides for single robots: team + player id = profile."},
+    {k: "network_ingress", label: "Per-receiver loss", type: "switch", show: c => isMatch(c) && c.network_profile !== "none", help: () => "Impair each receiver's link (ifb) so a broadcast is lost independently per robot, instead of once at the sender. A robot's profile then describes its receiving link."},
     {k: "viewer", label: "MuJoCo viewer window", type: "switch", show: c => c.simulator !== "2d", help: () => "Needs a display (WSLg works)."},
     {k: "graphics", label: "Viewer graphics", type: "seg", opts: [["gpu", "GPU"], ["cpu", "CPU"]], show: c => c.simulator !== "2d" && c.viewer, help: c => c.graphics === "cpu"
       ? "Software rendering on the CPU (Mesa llvmpipe). Slow with many robots; only for when the GPU driver misbehaves. macOS ignores this."

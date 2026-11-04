@@ -6,7 +6,7 @@ import socket
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import brains, settings
+from . import brains, netns, settings
 from .config import LaunchConfig
 from .rcap import RcapInfo
 from .store import project_root
@@ -78,6 +78,13 @@ def run(cfg: LaunchConfig, info: RcapInfo, stale: bool, root: Path | None = None
         else:
             out.append(Check("warn", "the viewer is drawn by the CPU (software rendering) and will be slow with several robots; "
                                      "GPU is the default"))
+    if netns.active(cfg):
+        lacks = netns.missing(netns.ingress_enabled(cfg, env))
+        if lacks:
+            out.append(Check("warn", "network profile will be ignored (running without namespaces): " + "; ".join(lacks)))
+        else:
+            out.append(Check("ok", "network profile: " + ", ".join(sorted(set(netns.robot_profiles(cfg)))) +
+                                   " (each brain in its own namespace; needs sudo, torn down afterwards)"))
     if cfg.is_match:
         out += _match_checks(cfg, platform)
     elif cfg.ros_domain_id is None and not env.get("ROS_DOMAIN_ID"):
