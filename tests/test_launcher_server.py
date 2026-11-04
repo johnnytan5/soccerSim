@@ -81,8 +81,8 @@ def stack(tmp_path):
     bridge.close()
 
 
-def req(stack, method, path, body=None, headers=None, raw=None):
-    c = http.client.HTTPConnection("127.0.0.1", stack.server.port, timeout=5)
+def req_on(port, method, path, body=None, headers=None, raw=None):
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     h = dict(headers or {})
     data = raw
     if body is not None:
@@ -96,6 +96,10 @@ def req(stack, method, path, body=None, headers=None, raw=None):
         return r.status, json.loads(payload)
     except ValueError:
         return r.status, payload
+
+
+def req(stack, method, path, body=None, headers=None, raw=None):
+    return req_on(stack.server.port, method, path, body, headers, raw)
 
 
 def test_pages_and_state(stack):
@@ -128,6 +132,28 @@ def test_request_hardening(stack):
     s.sendall(b"POST /api/launcher/stop HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: -1\r\n\r\n")
     assert b" 400 " in s.recv(200).split(b"\r\n")[0]
     s.close()
+
+
+def test_configured_proxy_host_is_accepted(stack):
+    proxy = "faw-magx870-wsl.coati-avior.ts.net"
+    server = LauncherServer(stack.jobs, 0, allowed_hosts=[proxy])
+    server.start()
+    try:
+        for host in (proxy, f"{proxy}:443"):
+            assert req_on(server.port, "GET", "/", headers={"Host": host})[0] == 200, host
+        assert req_on(server.port, "GET", "/", headers={"Host": "evil.example"})[0] == 403
+        assert req_on(server.port, "POST", "/api/launcher/stop", {},
+                      headers={"Host": proxy, "Origin": f"https://{proxy}"})[0] == 200
+        assert req_on(server.port, "POST", "/api/launcher/stop", {},
+                      headers={"Host": proxy, "Origin": "https://evil.example"})[0] == 403
+    finally:
+        server.stop()
+
+
+def test_allow_host_splits_cli_and_env():
+    from soccer_launcher.__main__ import _allowed_hosts
+    assert _allowed_hosts(["a.example, b.example", "c.example"], "d.example, ,e.example") == [
+        "a.example", "b.example", "c.example", "d.example", "e.example"]
 
 
 def test_check_launch_stop_flow(stack):

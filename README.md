@@ -156,6 +156,11 @@ How it works:
 - **Saved state** is in `.launcher/state.json` (git-ignored): the last launched config, restored on the
   next start, and your named profiles. Unsaved form edits survive a page reload.
 - The server only listens on 127.0.0.1, rejects foreign `Host`/`Origin` headers, and never uses a shell.
+  To serve the page through a reverse proxy such as `tailscale serve`, allow the public hostname the proxy
+  forwards: `pixi run launch --allow-host <name>` (repeatable or comma-separated), set
+  `SOCCER_LAUNCHER_ALLOWED_HOSTS`, or put it in a git-ignored `.env` at the project root (see
+  `.env.example`); `pixi run launch` loads that file automatically. Exported variables win over `.env`.
+  The listener itself still binds to 127.0.0.1.
 - `pixi run keeper`, `keeper-quick` and `striker` still work on their own, with the bridge's simpler
   controller page (below) on port 8765, when the launcher is not running.
 - **Match presets** (5v5, 5 robots with no opponents, goalie vs 1 or 2 strikers, goalies only, and a custom

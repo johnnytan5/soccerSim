@@ -17,3 +17,4 @@ MUJOCO_LOG.TXT
 *.log.*
 .launcher/
 ros_ws_brains/
+.env
