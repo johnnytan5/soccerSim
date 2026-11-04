@@ -9,6 +9,7 @@ import sys
 from . import build, command, rcap
 from .config import DEFAULT_CONFIG
 from . import settings
+from .env import load_dotenv
 from .store import Store, project_root
 
 
@@ -41,6 +42,13 @@ def _relaunch_last() -> int:
 DEFAULT_PORT = 8765
 
 
+def _allowed_hosts(values: list[str] | None, env: str) -> list[str]:
+    """Split `--allow-host` values and the env var on commas, dropping blanks."""
+    raw = [part for value in (values or []) for part in value.split(",")]
+    raw += env.split(",")
+    return [h.strip() for h in raw if h.strip()]
+
+
 def _open_browser(url: str) -> None:
     import shutil
     import webbrowser
@@ -53,7 +61,7 @@ def _open_browser(url: str) -> None:
         pass  # best effort: the URL is printed anyway
 
 
-def _serve(port: int, open_browser: bool) -> int:
+def _serve(port: int, open_browser: bool, allowed_hosts: list[str] | None = None) -> int:
     import signal
     import threading
 
@@ -71,7 +79,7 @@ def _serve(port: int, open_browser: bool) -> int:
     jobs = JobController(store)
     jobs.refresh(store.last.rcap_root if store.last else "")
     try:
-        server = LauncherServer(jobs, port)
+        server = LauncherServer(jobs, port, allowed_hosts=allowed_hosts or ())
     except OSError as e:
         print(f"soccer launcher: cannot listen on port {port}: {e}", file=sys.stderr)
         return 1
@@ -101,14 +109,19 @@ def _serve(port: int, open_browser: bool) -> int:
 
 
 def main() -> int:
+    load_dotenv(project_root() / ".env")
     ap = argparse.ArgumentParser(prog="soccer_launcher", description="soccerSim web Control Centre")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port to serve on (default {DEFAULT_PORT})")
     ap.add_argument("--no-open", action="store_true", help="don't try to open a browser")
+    ap.add_argument("--allow-host", action="append", metavar="HOST",
+                    help="extra Host header to accept, for a reverse proxy such as `tailscale serve` "
+                         "(repeatable or comma-separated; also SOCCER_LAUNCHER_ALLOWED_HOSTS)")
     ap.add_argument("--last", action="store_true", help="skip the web UI and run the last saved config")
     args = ap.parse_args()
     if args.last:
         return _relaunch_last()
-    return _serve(args.port, not args.no_open)
+    hosts = _allowed_hosts(args.allow_host, os.environ.get("SOCCER_LAUNCHER_ALLOWED_HOSTS", ""))
+    return _serve(args.port, not args.no_open, hosts)
 
 
 if __name__ == "__main__":

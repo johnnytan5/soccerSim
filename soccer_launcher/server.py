@@ -10,6 +10,7 @@ import json
 import os
 import re
 import threading
+from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -34,9 +35,26 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 _NAME_RE = re.compile(r"^[^\x00-\x1f]{1,40}$")
 
 
+def _normalize_hosts(hosts: Iterable[str]) -> set[str]:
+    """Hostnames (without ports) from raw allow-list entries, ignoring unusable ones."""
+    names = set()
+    for entry in hosts:
+        try:
+            name = urlsplit("//" + str(entry).strip()).hostname
+        except ValueError:
+            name = None
+        if name:
+            names.add(name.lower())
+    return names
+
+
 class LauncherServer:
-    def __init__(self, jobs: JobController, port: int = 8765, host: str = "127.0.0.1"):
+    def __init__(self, jobs: JobController, port: int = 8765, host: str = "127.0.0.1",
+                 allowed_hosts: Iterable[str] = ()):
         self.jobs = jobs
+        # Loopback stays allowed by default; extra names cover reverse proxies (e.g. `tailscale serve`)
+        # that forward the public hostname in the Host header.
+        self.allowed_hosts = LOCAL_HOSTS | _normalize_hosts(allowed_hosts)
         self.closing = threading.Event()
         self._upstream = threading.local()
         outer = self
@@ -69,7 +87,11 @@ class LauncherServer:
                     name, port = u.hostname, u.port
                 except ValueError:
                     return False
-                return name in LOCAL_HOSTS and port in (None, outer.port)
+                if name not in outer.allowed_hosts:
+                    return False
+                # Loopback names must use the launcher's own port, so a same-site request cannot be
+                # bounced to another local service. Explicitly configured proxy names may use theirs.
+                return name not in LOCAL_HOSTS or port in (None, outer.port)
 
             def _origin_ok(self) -> bool:
                 origin = self.headers.get("Origin")
