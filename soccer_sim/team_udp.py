@@ -24,7 +24,7 @@ class TeamPacketCounter:
     """`ports` maps team -> UDP port. `on_packet(team, n)` runs on the counter's thread for every batch received."""
 
     def __init__(self, ports: dict[str, int], on_packet: Callable[[str, int], None],
-                 warn: Callable[[str], None] = print):
+                 warn: Callable[[str], None] = print, bind: str = "0.0.0.0"):
         self._on_packet = on_packet
         self._socks: dict[socket.socket, str] = {}
         for team, port in ports.items():
@@ -32,7 +32,7 @@ class TeamPacketCounter:
             try:
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                sock.bind(("0.0.0.0", port))
+                sock.bind((bind, port))  # a subnet broadcast address counts only that subnet (parallel slots)
                 sock.setblocking(False)
             except OSError as e:
                 sock.close()

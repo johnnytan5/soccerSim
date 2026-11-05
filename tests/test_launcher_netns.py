@@ -128,3 +128,95 @@ def test_preflight_warns_when_unsupported(monkeypatch, tmp_path):
 def test_ns_exec_script_syntax():
     assert subprocess.run(["bash", "-n", "scripts/ns_exec.sh"]).returncode == 0
     assert subprocess.run(["bash", "-n", "scripts/netem.sh"]).returncode == 0
+
+
+# ---- parallel slots (SS_SLOT) and custom profiles ----------------------------------------------------------
+import os
+import re
+import shlex
+from pathlib import Path
+
+NETEM_SH = Path(__file__).resolve().parent.parent / "scripts" / "netem.sh"
+
+
+def _sh_names(slot: str) -> dict[str, str]:
+    out = subprocess.run(["bash", str(NETEM_SH), "names"], capture_output=True, text=True, check=True,
+                         env={**os.environ, "SS_SLOT": slot}).stdout
+    return dict(kv.split("=", 1) for kv in shlex.split(out))
+
+
+def test_default_slot_keeps_todays_names():
+    n = netns.slot_names("")
+    assert (n["bridge"], n["namespace"], n["host"], n["peer"], n["ifb"]) == ("br-sim", "ss-r1", "ssh1", "ssv1", "ssi1")
+    assert n["subnet"] == "10.77.0.0/24" and n["gateway"] == netns.GATEWAY and n["broadcast"] == netns.BROADCAST
+
+
+@pytest.mark.parametrize("slot", list("0123456789"))
+def test_slot_names_and_subnet(slot):
+    n = netns.slot_names(slot, robot=10)
+    assert n["bridge"] == f"br-sim{slot}" and n["namespace"] == f"ss{slot}-r10"
+    assert n["subnet"] == f"10.77.{int(slot) + 1}.0/24" and n["robot_ip"] == f"10.77.{int(slot) + 1}.20"
+    assert n["gateway"] == f"10.77.{int(slot) + 1}.1" and n["broadcast"] == f"10.77.{int(slot) + 1}.255"
+    for key in ("bridge", "host", "peer", "ifb"):
+        assert len(n[key]) <= 15 and re.fullmatch(r"[a-z0-9_-]+", n[key])
+
+
+def test_slots_never_collide():
+    seen = set()
+    for slot in ("", *"0123456789"):
+        for r in range(1, 11):
+            n = netns.slot_names(slot, r)
+            for key in ("namespace", "host", "peer", "ifb", "robot_ip"):
+                assert (key, n[key]) not in seen
+                seen.add((key, n[key]))
+
+
+@pytest.mark.parametrize("slot", ["", "0", "3", "9"])
+def test_netem_sh_agrees_with_python(slot):
+    sh, py = _sh_names(slot), netns.slot_names(slot)
+    assert sh["bridge"] == py["bridge"] and sh["subnet"] == py["subnet"] and sh["gateway"] == py["gateway"]
+    assert sh["broadcast"] == py["broadcast"] and sh["ns1"] == py["namespace"]
+    assert (sh["host1"], sh["peer1"], sh["ifb1"]) == (py["host"], py["peer"], py["ifb"])
+
+
+def test_bad_slot_rejected():
+    with pytest.raises(ValueError):
+        netns.slot_names("10")
+    assert subprocess.run(["bash", str(NETEM_SH), "names"], env={**os.environ, "SS_SLOT": "x"}, capture_output=True).returncode == 2
+    assert _cfg(netns_slot="12", network_profile="good").validate()
+
+
+def test_slot_changes_launch_args_and_env():
+    cfg = _cfg(network_profile="good", netns_slot="2")
+    argv, _ = command.build_command(cfg)
+    assert "ns_prefix:=ss2-r" in argv and "game_control_ip:=10.77.3.1" in argv
+    params = json.loads(next(a for a in argv if a.startswith("brain_params:="))[len("brain_params:="):])
+    assert params["communication.discovery_address"] == "10.77.3.255"
+    assert netns.netem_env(cfg, {})["SS_SLOT"] == "2"
+    assert netns.netem_env(_cfg(network_profile="good"), {"SS_SLOT": "5"})["SS_SLOT"] == "5"
+    assert not any(a.startswith("ns_prefix:=") for a in command.build_command(_cfg(network_profile="good"))[0])
+
+
+@pytest.mark.parametrize("text", ["lat0_loss0", "lat100_loss5", "lat150_loss2.5", "lat20_loss0"])
+def test_custom_profiles_valid(text):
+    assert netns.valid_profile(text)
+
+
+@pytest.mark.parametrize("text", ["lat_loss", "lat100", "lat100_loss", "latx_loss1", "lat-5_loss1"])
+def test_custom_profiles_invalid(text):
+    assert not netns.valid_profile(text)
+
+
+def _netem_args(profile: str) -> str:
+    script = f"source <(sed -n '/^custom_args/,/^}}/p' {NETEM_SH}); custom_args {profile}"
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_custom_profile_netem_args_have_the_target_mean_loss():
+    assert _netem_args("lat0_loss0") == "limit 1000"
+    assert _netem_args("lat100_loss0") == "delay 100ms 40ms distribution normal"
+    for pct in (1, 5, 15, 30, 50):
+        m = re.search(r"gemodel ([\d.]+)% ([\d.]+)% ([\d.]+)% 0%", _netem_args(f"lat0_loss{pct}"))
+        p, r, lb = (float(x) / 100 for x in m.groups())
+        assert 0 < p < 1 and r == pytest.approx(0.3)
+        assert p / (p + r) * lb == pytest.approx(pct / 100, rel=1e-3)  # stationary mean loss

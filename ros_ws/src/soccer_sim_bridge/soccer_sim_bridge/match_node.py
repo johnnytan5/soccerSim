@@ -52,6 +52,8 @@ TOUCH_DIST_M = 0.45  # a robot this close to the ball (trunk to ball) counts as 
 BOOT_PLAN = ((2.0, "hat_u"), (7.0, "a"), (10.0, "b"))
 BOOT_HOLD_S = 0.4
 MAX_ROBOTS = 10
+TRACE_HZ = 10.0
+TRACE_PERIOD_S = 1.0 / TRACE_HZ
 
 
 @dataclass
@@ -161,7 +163,7 @@ def _fmt_clock(secs: float) -> str:
 class MatchBridge:
     def __init__(self, roster: list[PlayerSpec], cfg: SimConfig, match: MatchCfg, domain_base: int,
                  web_port: int, full_auto: bool, camera_every: int = 2, packet_budget: int = 60000,
-                 backend: str = "mujoco", kin_params=None):
+                 backend: str = "mujoco", kin_params=None, packet_bind: str = "0.0.0.0"):
         problems = validate_roster(roster)
         if problems:
             raise ValueError("; ".join(problems))
@@ -173,7 +175,7 @@ class MatchBridge:
         teams = tuple(t for t in (HOME, AWAY) if any(p.team == t for p in roster))
         self.budget = PacketBudget(packet_budget, teams)
         self.packet_counter = TeamPacketCounter({t: team_port(t) for t in teams}, self.budget.add,
-                                                lambda text: print(f"[match] {text}", flush=True))
+                                                lambda text: print(f"[match] {text}", flush=True), packet_bind)
         self.joystick_timeout = 0.5
         self.lock = threading.Lock()
         self.frames = {HOME: TeamFrame(False), AWAY: TeamFrame(True)}
@@ -219,6 +221,10 @@ class MatchBridge:
         self.blackout_file = ""  # --blackout-file: {"start": wall, "end": wall|null} written by the batch runner
         self._blackout: tuple[float, float | None] | None = None
         self._blackout_read = 0.0
+        self._play_wall0: tuple[float, int] | None = None  # (monotonic, tick_count) at the first PLAY sample: mean tick rate
+        self.trace_path = ""  # --trace-out: JSONL, one row per 0.1 s of PLAY (sampled in _record_metrics)
+        self._trace_file = None
+        self._trace_next = 0.0
         self.finished = False  # the metrics run reached its PLAY time: the run loops stop
         self.shot_panel = ShotPanel()
         self._log = lambda text: print(f"[match] {text}", flush=True)
@@ -530,12 +536,47 @@ class MatchBridge:
                 role=brain.get("player_role"), rank=brain.get("outfield_rank"), im_lead=brain.get("im_lead"),
                 role_own_view=brain.get("role_own_view")))
         playing = st["state"] == "PLAYING" and not st["stopped"]
+        if playing and self._play_wall0 is None:
+            self._play_wall0 = (time.monotonic(), self.tick_count)
         if playing and self.play_flag and not os.path.exists(self.play_flag):
             self._write_json_atomic(self.play_flag, {"wall": time.time(), "sim_t": self.tick_count * self.world.policy_dt})
         self.recorder.add(Sample(self.tick_count * self.world.policy_dt, playing, (st["ball"]["x"], st["ball"]["y"]), robots,
                                  blackout=playing and self._in_blackout()))
+        if self._trace_file is not None and playing and self.recorder.play_s >= self._trace_next:
+            self._trace_next = max(self._trace_next + TRACE_PERIOD_S, self.recorder.play_s - TRACE_PERIOD_S / 2)  # fixed 10 Hz grid
+            self._write_trace(st, views, robots, blackout=playing and self._in_blackout())
         if self.recorder.play_s >= self.metrics_secs or st["state"] == "FINISHED":
             self._write_metrics()
+
+    def enable_trace(self, path: str) -> None:
+        """--trace-out: needs the metrics recorder (rows come from its sampling path, at TRACE_HZ of PLAY time)."""
+        self.trace_path = path
+        self._trace_file = open(path, "w")
+
+    def _write_trace(self, st: dict, views: dict, samples: list, blackout: bool) -> None:
+        """One JSONL row: PLAY time, ground-truth ball, and per robot the truth pose, brain signals, links and ball estimates."""
+        vx, vy = (float(v) for v in self.world.ball_velocity()[:2])
+        rows = []
+        for r, smp in zip(st["robots"], samples):
+            v = views.get(r["index"])
+            fresh = v is not None and not v.get("stale")
+
+            def ball(b):
+                return {"x": b.get("x"), "y": b.get("y"), "valid": bool(b.get("valid"))} if b else None
+
+            rows.append({
+                "id": self.roster[r["index"]].player_id, "team": r["team"], "x": round(r["x"], 3), "y": round(r["y"], 3),
+                "theta": round(r["yaw"], 3), "decision": r["decision"], "player_role": smp.role, "im_lead": smp.im_lead,
+                "outfield_rank": smp.rank, "role_own_view": smp.role_own_view, "comm_mode": smp.comm_mode,
+                "links": [{"player": l.get("player"), "health": l.get("health"), "latency_ms": l.get("latency_ms"),
+                           "loss": l.get("loss")} for l in (v.get("links") or [])] if fresh else [],
+                "fused_ball": ball(v.get("fused_ball")) if fresh else None,
+                "own_ball": ball(v.get("local_ball")) if fresh else None,
+            })
+        row = {"t": round(self.recorder.play_s, 3), "ball": {"x": round(st["ball"]["x"], 3), "y": round(st["ball"]["y"], 3),
+                                                              "vx": round(vx, 3), "vy": round(vy, 3)},
+               "blackout": blackout, "robots": rows}
+        self._trace_file.write(json.dumps(row, separators=(",", ":")) + "\n")
 
     @staticmethod
     def _write_json_atomic(path: str, doc: dict) -> None:
@@ -562,14 +603,25 @@ class MatchBridge:
         start, end = self._blackout
         return now >= start and (end is None or now < end)
 
+    def _tick_hz_mean(self) -> float | None:
+        """Mean sim tick rate over the PLAY phase (wall clock), not just the last second."""
+        if self._play_wall0 is None:
+            return None
+        t0, n0 = self._play_wall0
+        return round((self.tick_count - n0) / max(time.monotonic() - t0, 1e-6), 1)
+
     def _write_metrics(self) -> None:
         score = dict(self.gc.score)
         doc = {"meta": self.metrics_meta, "score": {"home": score.get(HOME, 0), "away": score.get(AWAY, 0)},
-               "tick_hz_last": round(self.tick_hz, 1), **self.recorder.summary()}
+               "tick_hz_last": round(self.tick_hz, 1),
+               "tick_hz_mean": self._tick_hz_mean(), **self.recorder.summary()}
         with open(self.metrics_out, "w") as f:
             json.dump(doc, f, indent=1)
         self._log(f"metrics written to {self.metrics_out}")
         self.finished = True
+        if self._trace_file is not None:
+            self._trace_file.close()
+            self._trace_file = None
 
     def _packet_status(self) -> dict:
         counting = self.packet_counter.active
@@ -736,6 +788,8 @@ def parse_args(argv):
     p.add_argument("--web-port", type=int, default=8765)
     p.add_argument("--packet-budget", type=int, default=60000,
                    help="UDP packets each team may send per match (RCAP: 60000); over it the score is zeroed; 0 = no limit")
+    p.add_argument("--packet-bind", default="0.0.0.0", help="address the team packet counter listens on (a subnet broadcast address "
+                   "keeps parallel network slots apart)")
     p.add_argument("--ball-x", type=float, default=0.0)
     p.add_argument("--ball-y", type=float, default=0.0)
     p.add_argument("--detailed-bodies", action="store_true",
@@ -747,6 +801,7 @@ def parse_args(argv):
     p.add_argument("--metrics-play-secs", type=float, default=60.0, help="PLAY seconds (simulated) to record")
     p.add_argument("--play-flag", default="", help="file written when PLAY first starts (the batch runner polls it)")
     p.add_argument("--blackout-file", default="", help="JSON {start,end} (wall clock) of a runner-applied blackout window")
+    p.add_argument("--trace-out", default="", help="with --metrics-out: JSONL trace of the PLAY phase at 10 Hz (ball, robots, roles, links)")
     p.add_argument("--metrics-meta", default="{}", help="JSON object copied into the metrics file")
     return p.parse_args(argv)
 
@@ -816,10 +871,14 @@ def main(argv=None) -> None:
                      hold_initial=args.start == "full_auto",
                      teams=tuple(t for t in (HOME, AWAY) if any(p.team == t for p in roster)))
     bridge = MatchBridge(roster, cfg, match, args.domain_base, args.web_port, args.start == "full_auto",
-                         args.camera_every, args.packet_budget, args.sim_backend, kin_params)
+                         args.camera_every, args.packet_budget, args.sim_backend, kin_params, args.packet_bind)
     if args.metrics_out:
         bridge.enable_metrics(args.metrics_out, args.metrics_play_secs, json.loads(args.metrics_meta))
         bridge.play_flag, bridge.blackout_file = args.play_flag, args.blackout_file
+        if args.trace_out:
+            bridge.enable_trace(args.trace_out)
+    elif args.trace_out:
+        raise SystemExit("--trace-out needs --metrics-out (it reuses the metrics sampling)")
     try:
         if kinematic:
             _run_realtime(bridge, None, None, args.profile, args.profile_file)

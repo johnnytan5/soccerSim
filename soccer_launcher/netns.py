@@ -21,8 +21,27 @@ if TYPE_CHECKING:
 PROFILES = ("none", "good", "rcap_bad", "terrible", "blackout")
 BROADCAST = "10.77.0.255"  # directed broadcast of br-sim (10.77.0.0/24); game_control_ip is the bridge itself
 GATEWAY = "10.77.0.1"
-_PROFILE_RE = re.compile(r"^(none|good|rcap_bad|terrible|blackout(:\d+(\.\d+)?)?)$")
+SLOTS = "0123456789"  # SS_SLOT: parallel copies of the whole setup (see scripts/netem.sh)
+_PROFILE_RE = re.compile(r"^(none|good|rcap_bad|terrible|blackout(:\d+(\.\d+)?)?|lat\d+_loss\d+(\.\d+)?)$")
 _OVERRIDE_RE = re.compile(r"^(home|away)(\d+)$")
+
+
+def slot_names(slot: str = "", robot: int = 1) -> dict[str, str]:
+    """Names netem.sh derives for a slot ('' = the default set). Interface names are <= 15 characters (checked by a test)."""
+    if slot not in ("", *SLOTS):
+        raise ValueError(f"slot must be empty or one digit 0-9, not '{slot}'")
+    if slot == "":
+        net, ns, br, sep = "10.77.0", "ss-r", "br-sim", ""
+    else:
+        net, ns, br, sep = f"10.77.{int(slot) + 1}", f"ss{slot}-r", f"br-sim{slot}", f"{slot}_"
+    return {"bridge": br, "subnet": f"{net}.0/24", "gateway": f"{net}.1", "broadcast": f"{net}.255",
+            "namespace": f"{ns}{robot}", "host": f"ssh{sep}{robot}", "peer": f"ssv{sep}{robot}", "ifb": f"ssi{sep}{robot}",
+            "ns_prefix": ns, "robot_ip": f"{net}.{10 + robot}"}
+
+
+def slot_of(cfg: LaunchConfig, env: dict[str, str] | None = None) -> str:
+    env = os.environ if env is None else env
+    return cfg.netns_slot or env.get("SS_SLOT", "")
 
 
 def valid_profile(text: str) -> bool:
@@ -46,7 +65,9 @@ def parse_overrides(text: str) -> dict[tuple[str, int], str]:
 def validate(cfg: LaunchConfig) -> list[str]:
     errs = []
     if not valid_profile(cfg.network_profile):
-        errs.append("network profile must be none, good, rcap_bad, terrible or blackout[:seconds]")
+        errs.append("network profile must be none, good, rcap_bad, terrible, blackout[:seconds] or lat<ms>_loss<pct>")
+    if cfg.netns_slot not in ("", *SLOTS):
+        errs.append("netns slot must be empty or one digit 0-9")
     try:
         parse_overrides(cfg.network_overrides)
     except ValueError as e:
@@ -63,7 +84,7 @@ def active(cfg: LaunchConfig) -> bool:
 
 
 def robot_profiles(cfg: LaunchConfig) -> list[str]:
-    """Profile of each robot in roster order (robot i lives in namespace ss-r{i+1}). Bad overrides are ignored here
+    """Profile of each robot in roster order (robot i lives in namespace ss-r{i+1}, or ss<slot>-r{i+1}). Bad overrides are ignored here
     (validate reports them)."""
     try:
         over = parse_overrides(cfg.network_overrides)
@@ -80,11 +101,17 @@ def ingress_enabled(cfg: LaunchConfig, env: dict[str, str] | None = None) -> boo
 
 def brain_extras(cfg: LaunchConfig) -> tuple[dict[str, str], dict]:
     """(extra `ros2 launch` arguments as {name: value}, brain parameter overrides) that put the brains on the veth."""
-    return ({"netns": "true", "game_control_ip": GATEWAY}, {"communication.discovery_address": BROADCAST})
+    slot = slot_of(cfg)
+    if slot == "":  # the default set: the command line stays exactly as before
+        return ({"netns": "true", "game_control_ip": GATEWAY}, {"communication.discovery_address": BROADCAST})
+    n = slot_names(slot)
+    return ({"netns": "true", "game_control_ip": n["gateway"], "ns_prefix": n["ns_prefix"]},
+            {"communication.discovery_address": n["broadcast"]})
 
 
 def netem_env(cfg: LaunchConfig, env: dict[str, str] | None = None) -> dict[str, str]:
-    return {"SS_ROBOTS": str(len(cfg.players)), "SS_NETEM_INGRESS": "1" if ingress_enabled(cfg, env) else "0"}
+    return {"SS_ROBOTS": str(len(cfg.players)), "SS_NETEM_INGRESS": "1" if ingress_enabled(cfg, env) else "0",
+            "SS_SLOT": slot_of(cfg, env)}
 
 
 # ---- preflight --------------------------------------------------------------------------------------

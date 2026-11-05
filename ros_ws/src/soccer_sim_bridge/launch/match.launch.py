@@ -43,6 +43,7 @@ def _brains(context):
         team_cfg[team] = team_brain(team, LaunchConfiguration(f"{team}_brain_install").perform(context),
                                     LaunchConfiguration(f"{team}_brain_root").perform(context), default_root)
     use_netns = LaunchConfiguration("netns").perform(context).lower() == "true"  # scripts/netem.sh namespaces are up
+    ns_prefix = LaunchConfiguration("ns_prefix").perform(context)  # "ss-r", or "ss<slot>-r" for a parallel slot
     ns_exec = os.path.join(os.environ.get("SOCCER_SIM_ROOT", os.getcwd()), "scripts", "ns_exec.sh")
     extra = json.loads(LaunchConfiguration("brain_params").perform(context) or "{}")
     if not isinstance(extra, dict):
@@ -76,7 +77,7 @@ def _brains(context):
                 parameters=[os.path.join(brain_dir, "config", "config.yaml"), overrides],
                 additional_env={"ROS_DOMAIN_ID": str(base + i)},
                 # robot i runs in network namespace ss-r{i+1}, as the same user with the same environment
-                prefix=f"bash {ns_exec} ss-r{i + 1}" if use_netns else None,
+                prefix=f"bash {ns_exec} {ns_prefix}{i + 1}" if use_netns else None,
             )
         )
     return nodes
@@ -96,6 +97,7 @@ def generate_launch_description():
             DeclareLaunchArgument("away_brain_root", default_value=""),
             DeclareLaunchArgument("brain_params", default_value="{}"),
             DeclareLaunchArgument("netns", default_value="false"),
+            DeclareLaunchArgument("ns_prefix", default_value="ss-r"),
             OpaqueFunction(function=_brains),
         ]
     )

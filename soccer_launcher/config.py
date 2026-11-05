@@ -45,6 +45,7 @@ class LaunchConfig:
     # scripts/netem.sh with the team channel impaired. overrides: "home3=terrible,away2=blackout:10".
     network_profile: str = "none"
     network_overrides: str = ""
+    netns_slot: str = ""  # parallel network setups (batch --parallel): one digit; "" = br-sim / ss-rN (scripts/netem.sh SS_SLOT)
     network_ingress: bool = False  # impair each receiver's link independently (ifb) instead of the sender's
     # Perception
     ball_detector: str = "yolo"

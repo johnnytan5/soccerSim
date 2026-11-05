@@ -22,7 +22,10 @@ import argparse
 import csv
 import re
 import json
+import concurrent.futures
+import queue
 import shutil
+import threading
 import os
 import signal
 import subprocess
@@ -72,6 +75,10 @@ def parse_args(argv=None):
     p.add_argument("--out", default="results/batch.csv")
     p.add_argument("--players", type=int, default=5, help="players per team (5 = 5v5; ids 1..N, player 1 is the keeper)")
     p.add_argument("--yolo", action="store_true", help="YOLO ball detection from the rendered camera (slow) instead of ground truth")
+    p.add_argument("--trace", action="store_true", help="also write <stem>.trace.jsonl next to each match JSON (10 Hz PLAY trace)")
+    p.add_argument("--parallel", type=int, default=1, metavar="K",
+                   help="run K matches at once, each in its own network slot (SS_SLOT, br-sim<n>), ROS domains spaced by 20 "
+                        "(max 4 with --domain-base 150); the sim must keep tick_hz >= 45 or the matches are slowed down")
     p.add_argument("--ready-secs", type=float, default=6.0, help="READY phase before kick-off")
     p.add_argument("--seed", type=int, default=1, help="first match's seed; the next matches add 1")
     p.add_argument("--domain-base", type=int, default=150, help="ROS domain of the first robot (avoid other running sims)")
@@ -124,7 +131,19 @@ def _drive_blackout(spec, window, flag_path: Path, bo_path: Path, cfg, log):
     return window
 
 
-def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, ws: Path) -> dict | None:
+DOMAIN_SPACING = 20  # a match uses up to 10 consecutive ROS domains
+MAX_DOMAIN = 232
+
+
+def slot_plan(args, k: int) -> tuple[str, int]:
+    """(netem slot, ROS domain base) of the k-th concurrent match. One match alone keeps today's names and base."""
+    if args.parallel <= 1:
+        return "", args.domain_base
+    return str(k), args.domain_base + DOMAIN_SPACING * k
+
+
+def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, ws: Path, k: int = 0) -> dict | None:
+    slot, domain_base = slot_plan(args, k)
     ids = tuple(range(1, args.players + 1))
     tag = f"{profile.replace(':', '')}_{args.brain}_{n}"
     json_path = out.with_name(f"{out.stem}_{tag}.json")
@@ -137,8 +156,13 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, w
     extra = (f"--web-port -1 --ready-secs {args.ready_secs:g} --seed {meta['seed']} --metrics-out {json_path} "
              f"--metrics-play-secs {args.duration:g} "
              f"--play-flag {flag_path} --blackout-file {bo_path}")
+    if slot:  # count only this slot's team broadcasts (the other slots' bridges listen on their own subnets)
+        extra += f" --packet-bind {netns.slot_names(slot)['broadcast']}"
+    if args.trace:
+        extra += f" --trace-out {json_path.with_suffix('.trace.jsonl')}"
     cfg = _match(_players(ids, ids), continuous=True, network_profile="good" if blackout else profile, viewer=False, simulator="mujoco",
-                 ros_domain_id=args.domain_base, extra_bridge_args=extra)
+                 ros_domain_id=domain_base, extra_bridge_args=extra)
+    cfg.netns_slot = slot
     if args.yolo:
         cfg.ball_detector = "yolo"
     errs = cfg.validate()
@@ -182,6 +206,7 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, w
     bw = doc.get("blackout_window") or {}
     meta.update(blackout_start_play_s=bw.get("start_play_s"), blackout_end_play_s=bw.get("end_play_s"),
                 blackout_s=bw.get("duration_s"))
+    log(f"{tag}: tick_hz mean {doc.get('tick_hz_mean')} (last {doc.get('tick_hz_last')})")
     doc["meta"] = {**doc.get("meta", {}), **meta}
     json_path.write_text(json.dumps(doc, indent=1))
     return metrics.csv_row(meta, doc)
@@ -221,6 +246,8 @@ def main(argv=None) -> int:
         rcap_root = os.environ.get("ROBOTEDGE_ROOT", "")
         if not rcap_root:
             raise SystemExit("run through pixi (pixi run python scripts/batch_matches.py ...)")
+    if not 1 <= args.parallel <= (MAX_DOMAIN - args.domain_base - 9) // DOMAIN_SPACING + 1:
+        raise SystemExit(f"--parallel {args.parallel}: ROS domains {args.domain_base} + 20*k + 9 must stay <= {MAX_DOMAIN}")
     ws = Path(args.ws or ("ros_ws_baseline" if args.brain == "baseline" else "ros_ws"))
     ws = (ROOT / ws).resolve() if not ws.is_absolute() else ws
     if not (ws / "install" / "setup.bash").exists():
@@ -235,24 +262,45 @@ def main(argv=None) -> int:
         if lacks:
             raise SystemExit("cannot use network profiles here: " + "; ".join(lacks))
     columns = metrics.csv_columns()
-    new = not out.exists()
-    done = 0
-    for profile in profiles:
-        for n in range(args.matches):
-            print(f"[batch] {args.brain} {profile} match {n + 1}/{args.matches} ({args.players}v{args.players}, "
-                  f"{args.duration:g} s of play)", flush=True)
-            row = run_one(args, profile, n, out, logs, rcap_root, ws)
-            if row is None:
-                continue
+    state = {"new": not out.exists(), "done": 0}
+    write_lock = threading.Lock()
+    jobs = [(profile, n) for profile in profiles for n in range(args.matches)]
+
+    def work(job, k):
+        profile, n = job
+        print(f"[batch] {args.brain} {profile} match {n + 1}/{args.matches} ({args.players}v{args.players}, "
+              f"{args.duration:g} s of play" + (f", slot {k}" if args.parallel > 1 else "") + ")", flush=True)
+        row = run_one(args, profile, n, out, logs, rcap_root, ws, k)
+        if row is None:
+            return
+        with write_lock:
             with open(out, "a", newline="") as f:
                 w = csv.DictWriter(f, fieldnames=columns)
-                if new:
+                if state["new"]:
                     w.writeheader()
-                    new = False
+                    state["new"] = False
                 w.writerow(row)
-            done += 1
-            print(f"  play {row['play_s']} s in {row['wall_s']} s wall; goals {row['goals_home']}-{row['goals_away']}",
-                  flush=True)
+            state["done"] += 1
+            print(f"  [{profile} #{n}] play {row['play_s']} s in {row['wall_s']} s wall; goals {row['goals_home']}-{row['goals_away']}", flush=True)
+
+    if args.parallel <= 1:
+        for job in jobs:
+            work(job, 0)
+    else:
+        free = queue.Queue()
+        for k in range(args.parallel):
+            free.put(k)
+
+        def slotted(job):
+            k = free.get()
+            try:
+                work(job, k)
+            finally:
+                free.put(k)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.parallel) as pool:
+            list(pool.map(slotted, jobs))
+    done = state["done"]
     print(f"[batch] {done} matches -> {out}")
     return 0 if done else 1
 
