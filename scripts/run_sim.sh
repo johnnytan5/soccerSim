@@ -9,7 +9,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # colcon's setup.bash reads unset variables (COLCON_TRACE), so relax -u while sourcing it.
 set +u
 # shellcheck disable=SC1091
-source "$ROOT/ros_ws/install/setup.bash"
+source "$ROOT/scripts/ros_env.sh"
+ss_source_overlay "$ROOT/ros_ws"  # keeps the active pixi env (e.g. `-e gpu`) ahead of the one ros_ws was built in
 set -u
 
 PY=python
