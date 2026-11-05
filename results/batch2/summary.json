@@ -1,0 +1,4515 @@
+{
+ "meta": {
+  "generated": "2026-11-05T06:53:14Z",
+  "brains": {
+   "new": "26b1193",
+   "pre": "8d241a2"
+  },
+  "n_matches": 76,
+  "duration_s": 105.8,
+  "profiles": [
+   "good",
+   "rcap_bad",
+   "terrible",
+   "blackout:30@30"
+  ],
+  "notes": "Home and away teams pooled (n = 2 x matches). CI: Student t 95%. p_mwu: Mann-Whitney U two-sided. goals/goal_diff are from each team's own perspective. blackout:30@30/bo_duplicate_striker_frac: different signals (new=im_lead, pre=decision); blackout:30@30/bo_role_flips_per_min: different signals (new=player_role, pre=decision); blackout:30@30/duplicate_striker_frac: different signals (new=im_lead, pre=decision); blackout:30@30/out_duplicate_striker_frac: different signals (new=im_lead, pre=decision); blackout:30@30/out_role_flips_per_min: different signals (new=player_role, pre=decision); blackout:30@30/role_flips_per_min: different signals (new=player_role, pre=decision); good/duplicate_striker_frac: different signals (new=im_lead, pre=decision); good/role_flips_per_min: different signals (new=player_role, pre=decision); rcap_bad/duplicate_striker_frac: different signals (new=im_lead, pre=decision); rcap_bad/role_flips_per_min: different signals (new=player_role, pre=decision); terrible/duplicate_striker_frac: different signals (new=im_lead, pre=decision); terrible/role_flips_per_min: different signals (new=player_role, pre=decision)"
+ },
+ "rows": [
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "n": 10,
+   "mean": 9.198,
+   "ci_lo": 6.923197082829244,
+   "ci_hi": 11.472802917170757,
+   "median": 8.497
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "n": 10,
+   "mean": 14.7477,
+   "ci_lo": 8.277607000175678,
+   "ci_hi": 21.217792999824322,
+   "median": 16.0
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "n": 10,
+   "mean": 8.5482,
+   "ci_lo": 6.045395396483526,
+   "ci_hi": 11.051004603516473,
+   "median": 10.746500000000001,
+   "signal": "player_role"
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "n": 10,
+   "mean": 14.7477,
+   "ci_lo": 8.277607000175678,
+   "ci_hi": 21.217792999824322,
+   "median": 16.0,
+   "signal": "decision"
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "n": 10,
+   "mean": 7.7981,
+   "ci_lo": 5.395683520558755,
+   "ci_hi": 10.200516479441244,
+   "median": 7.2485
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "n": 10,
+   "mean": 54.58919999999999,
+   "ci_lo": 31.33657302618714,
+   "ci_hi": 77.84182697381284,
+   "median": 55.744
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "n": 10,
+   "mean": 145.23399999999998,
+   "ci_lo": 82.49958025576498,
+   "ci_hi": 207.96841974423498,
+   "median": 129.7065
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "n": 10,
+   "mean": 0.10823,
+   "ci_lo": 0.04411423264995129,
+   "ci_hi": 0.17234576735004872,
+   "median": 0.08665
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "n": 10,
+   "mean": 0.14333,
+   "ci_lo": 0.04540177033638916,
+   "ci_hi": 0.24125822966361088,
+   "median": 0.13215
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "n": 10,
+   "mean": 0.01011,
+   "ci_lo": -0.00247872112129547,
+   "ci_hi": 0.02269872112129547,
+   "median": 0.00385
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.01011,
+   "ci_lo": -0.00247872112129547,
+   "ci_hi": 0.02269872112129547,
+   "median": 0.00385,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.14333,
+   "ci_lo": 0.04540177033638916,
+   "ci_hi": 0.24125822966361088,
+   "median": 0.13215,
+   "signal": "decision"
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "n": 10,
+   "mean": 0.93462,
+   "ci_lo": 0.8900857808966124,
+   "ci_hi": 0.9791542191033876,
+   "median": 0.94185
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "n": 10,
+   "mean": 0.96099,
+   "ci_lo": 0.9408467087984439,
+   "ci_hi": 0.9811332912015561,
+   "median": 0.95765
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "n": 10,
+   "mean": 0.314,
+   "ci_lo": -0.011139135422366275,
+   "ci_hi": 0.6391391354223663,
+   "median": 0.24000000000000002
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "n": 10,
+   "mean": 0.192,
+   "ci_lo": 0.031799800042455306,
+   "ci_hi": 0.3522001999575447,
+   "median": 0.14
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "n": 10,
+   "mean": 2.534,
+   "ci_lo": 1.893542507289916,
+   "ci_hi": 3.1744574927100837,
+   "median": 2.4779999999999998
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "n": 10,
+   "mean": 4.0632,
+   "ci_lo": 2.8147123490041492,
+   "ci_hi": 5.311687650995851,
+   "median": 4.308
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "reaction_censored",
+   "n": 10,
+   "mean": 4.1,
+   "ci_lo": 2.3331987752405414,
+   "ci_hi": 5.866801224759458,
+   "median": 4.0
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "n": 10,
+   "mean": 2.4,
+   "ci_lo": 0.9223651288432817,
+   "ci_hi": 3.877634871156718,
+   "median": 2.0
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "n": 10,
+   "mean": 0.04797,
+   "ci_lo": 0.0441286155641881,
+   "ci_hi": 0.051811384435811896,
+   "median": 0.04675
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "n": 10,
+   "mean": 0.058609999999999995,
+   "ci_lo": 0.04770469999339405,
+   "ci_hi": 0.06951530000660594,
+   "median": 0.06409999999999999
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "n": 10,
+   "mean": 0.08048,
+   "ci_lo": 0.06175747596844612,
+   "ci_hi": 0.09920252403155387,
+   "median": 0.074
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "n": 10,
+   "mean": 0.09509,
+   "ci_lo": 0.07431347016659083,
+   "ci_hi": 0.11586652983340916,
+   "median": 0.09295
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "mode_healthy",
+   "n": 10,
+   "mean": 0.9998900000000001,
+   "ci_lo": 0.999797956175936,
+   "ci_hi": 0.9999820438240641,
+   "median": 0.9999
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "goal_diff",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": -0.3372224794536559,
+   "ci_hi": 0.3372224794536559,
+   "median": 0.0
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "goal_diff",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": -0.3372224794536559,
+   "ci_hi": 0.3372224794536559,
+   "median": 0.0
+  },
+  {
+   "profile": "good",
+   "brain": "new",
+   "metric": "goals",
+   "n": 10,
+   "mean": 0.1,
+   "ci_lo": -0.12621571627982026,
+   "ci_hi": 0.32621571627982027,
+   "median": 0.0
+  },
+  {
+   "profile": "good",
+   "brain": "pre",
+   "metric": "goals",
+   "n": 10,
+   "mean": 0.1,
+   "ci_lo": -0.12621571627982026,
+   "ci_hi": 0.32621571627982027,
+   "median": 0.0
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "n": 10,
+   "mean": 9.5982,
+   "ci_lo": 6.574143115306961,
+   "ci_hi": 12.62225688469304,
+   "median": 10.248000000000001
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "n": 10,
+   "mean": 24.4434,
+   "ci_lo": 20.941952883572405,
+   "ci_hi": 27.944847116427596,
+   "median": 25.241500000000002
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "n": 10,
+   "mean": 8.3483,
+   "ci_lo": 6.580116703731385,
+   "ci_hi": 10.116483296268616,
+   "median": 8.2475,
+   "signal": "player_role"
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "n": 10,
+   "mean": 24.4434,
+   "ci_lo": 20.941952883572405,
+   "ci_hi": 27.944847116427596,
+   "median": 25.241500000000002,
+   "signal": "decision"
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "n": 10,
+   "mean": 8.348099999999999,
+   "ci_lo": 5.9228591472582375,
+   "ci_hi": 10.773340852741761,
+   "median": 7.4975000000000005
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "n": 10,
+   "mean": 52.6404,
+   "ci_lo": 28.246944953085723,
+   "ci_hi": 77.03385504691428,
+   "median": 46.494
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "n": 10,
+   "mean": 162.4568,
+   "ci_lo": 131.06927331173213,
+   "ci_hi": 193.84432668826784,
+   "median": 145.951
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "n": 10,
+   "mean": 0.15511999999999998,
+   "ci_lo": 0.05894538566550306,
+   "ci_hi": 0.2512946143344969,
+   "median": 0.1461
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "n": 10,
+   "mean": 0.19667,
+   "ci_lo": 0.13958224747640563,
+   "ci_hi": 0.2537577525235944,
+   "median": 0.1986
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "n": 10,
+   "mean": 0.01757,
+   "ci_lo": 0.00885105100351743,
+   "ci_hi": 0.02628894899648257,
+   "median": 0.0165
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.01757,
+   "ci_lo": 0.00885105100351743,
+   "ci_hi": 0.02628894899648257,
+   "median": 0.0165,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.19667,
+   "ci_lo": 0.13958224747640563,
+   "ci_hi": 0.2537577525235944,
+   "median": 0.1986,
+   "signal": "decision"
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "n": 10,
+   "mean": 0.80899,
+   "ci_lo": 0.5950943124087138,
+   "ci_hi": 1.0228856875912862,
+   "median": 0.92435
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "n": 10,
+   "mean": 0.9631399999999999,
+   "ci_lo": 0.9422922255586366,
+   "ci_hi": 0.9839877744413632,
+   "median": 0.96635
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "n": 10,
+   "mean": 0.426,
+   "ci_lo": 0.028589352833664483,
+   "ci_hi": 0.8234106471663355,
+   "median": 0.21
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "n": 10,
+   "mean": 0.6100000000000001,
+   "ci_lo": 0.15967223730139363,
+   "ci_hi": 1.0603277626986065,
+   "median": 0.43
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "n": 10,
+   "mean": 3.6388,
+   "ci_lo": 2.349267552687588,
+   "ci_hi": 4.928332447312412,
+   "median": 3.176
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "n": 10,
+   "mean": 4.1688,
+   "ci_lo": 3.068939445932526,
+   "ci_hi": 5.268660554067474,
+   "median": 4.4399999999999995
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "reaction_censored",
+   "n": 10,
+   "mean": 3.7,
+   "ci_lo": 1.411603185660204,
+   "ci_hi": 5.988396814339796,
+   "median": 4.5
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "n": 10,
+   "mean": 3.1,
+   "ci_lo": 1.9101254023728176,
+   "ci_hi": 4.289874597627183,
+   "median": 3.0
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "n": 10,
+   "mean": 0.05313,
+   "ci_lo": 0.03909027958098114,
+   "ci_hi": 0.06716972041901885,
+   "median": 0.0577
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "n": 10,
+   "mean": 0.0817,
+   "ci_lo": 0.07520061079938815,
+   "ci_hi": 0.08819938920061184,
+   "median": 0.08474999999999999
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "n": 10,
+   "mean": 0.07207,
+   "ci_lo": 0.06180551882603542,
+   "ci_hi": 0.08233448117396457,
+   "median": 0.0742
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "n": 10,
+   "mean": 0.08432999999999999,
+   "ci_lo": 0.07129282673278739,
+   "ci_hi": 0.09736717326721259,
+   "median": 0.08349999999999999
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "mode_healthy",
+   "n": 8,
+   "mean": 0.04135,
+   "ci_lo": 0.013641522822330023,
+   "ci_hi": 0.06905847717766997,
+   "median": 0.031200000000000002
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "mode_degraded",
+   "n": 10,
+   "mean": 0.96682,
+   "ci_lo": 0.9425143567255904,
+   "ci_hi": 0.9911256432744097,
+   "median": 0.9801
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "goal_diff",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": -0.3372224794536559,
+   "ci_hi": 0.3372224794536559,
+   "median": 0.0
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "goal_diff",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0,
+   "median": 0.0
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "goals",
+   "n": 10,
+   "mean": 0.1,
+   "ci_lo": -0.12621571627982026,
+   "ci_hi": 0.32621571627982027,
+   "median": 0.0
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "goals",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0,
+   "median": 0.0
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "n": 10,
+   "mean": 14.3983,
+   "ci_lo": 9.48909663539672,
+   "ci_hi": 19.30750336460328,
+   "median": 12.746
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "n": 10,
+   "mean": 42.5415,
+   "ci_lo": 35.82147555234285,
+   "ci_hi": 49.26152444765715,
+   "median": 42.742999999999995
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "n": 10,
+   "mean": 8.4986,
+   "ci_lo": 5.976184482629563,
+   "ci_hi": 11.021015517370436,
+   "median": 8.25,
+   "signal": "player_role"
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "n": 10,
+   "mean": 42.5415,
+   "ci_lo": 35.82147555234285,
+   "ci_hi": 49.26152444765715,
+   "median": 42.742999999999995,
+   "signal": "decision"
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "n": 10,
+   "mean": 10.898900000000001,
+   "ci_lo": 5.669913222689265,
+   "ci_hi": 16.12788677731074,
+   "median": 6.7490000000000006
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "n": 10,
+   "mean": 87.387,
+   "ci_lo": 53.86702437074746,
+   "ci_hi": 120.90697562925254,
+   "median": 94.7185
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "n": 10,
+   "mean": 195.5113,
+   "ci_lo": 183.53069390846025,
+   "ci_hi": 207.49190609153976,
+   "median": 197.21699999999998
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "n": 10,
+   "mean": 0.22620999999999997,
+   "ci_lo": 0.09104998732175798,
+   "ci_hi": 0.361370012678242,
+   "median": 0.18375
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "n": 10,
+   "mean": 0.29345,
+   "ci_lo": 0.22316782526321224,
+   "ci_hi": 0.36373217473678776,
+   "median": 0.30805000000000005
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "n": 10,
+   "mean": 0.041120000000000004,
+   "ci_lo": 0.016760330907874488,
+   "ci_hi": 0.06547966909212552,
+   "median": 0.027000000000000003
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.041120000000000004,
+   "ci_lo": 0.016760330907874488,
+   "ci_hi": 0.06547966909212552,
+   "median": 0.027000000000000003,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.29345,
+   "ci_lo": 0.22316782526321224,
+   "ci_hi": 0.36373217473678776,
+   "median": 0.30805000000000005,
+   "signal": "decision"
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "n": 10,
+   "mean": 0.94673,
+   "ci_lo": 0.9166888509800486,
+   "ci_hi": 0.9767711490199513,
+   "median": 0.9485
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "n": 10,
+   "mean": 0.94435,
+   "ci_lo": 0.9298303399478354,
+   "ci_hi": 0.9588696600521647,
+   "median": 0.94655
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "n": 10,
+   "mean": 0.49400000000000005,
+   "ci_lo": -0.09047767479111007,
+   "ci_hi": 1.0784776747911102,
+   "median": 0.28
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "n": 10,
+   "mean": 0.43,
+   "ci_lo": 0.18143706420197753,
+   "ci_hi": 0.6785629357980225,
+   "median": 0.25
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "n": 10,
+   "mean": 2.9572,
+   "ci_lo": 1.3842103981305742,
+   "ci_hi": 4.530189601869425,
+   "median": 2.942
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "n": 10,
+   "mean": 3.5199999999999996,
+   "ci_lo": 2.291969996530681,
+   "ci_hi": 4.748030003469318,
+   "median": 3.1479999999999997
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "reaction_censored",
+   "n": 10,
+   "mean": 2.4,
+   "ci_lo": 0.7071565883545048,
+   "ci_hi": 4.092843411645495,
+   "median": 2.0
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "n": 10,
+   "mean": 0.7,
+   "ci_lo": -0.057813270718321874,
+   "ci_hi": 1.4578132707183218,
+   "median": 0.0
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "n": 10,
+   "mean": 0.09323000000000001,
+   "ci_lo": 0.07130898118240461,
+   "ci_hi": 0.1151510188175954,
+   "median": 0.09465
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "n": 10,
+   "mean": 0.21461000000000002,
+   "ci_lo": 0.19397037397271483,
+   "ci_hi": 0.23524962602728522,
+   "median": 0.20665
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "n": 10,
+   "mean": 0.09323000000000001,
+   "ci_lo": 0.07130898118240461,
+   "ci_hi": 0.1151510188175954,
+   "median": 0.09465
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "n": 10,
+   "mean": 0.08859,
+   "ci_lo": 0.07237424585300223,
+   "ci_hi": 0.10480575414699778,
+   "median": 0.0849
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "mode_isolated",
+   "n": 10,
+   "mean": 0.9999100000000001,
+   "ci_lo": 0.9998243561120579,
+   "ci_hi": 0.9999956438879423,
+   "median": 1.0
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "goal_diff",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": -0.5840864678680839,
+   "ci_hi": 0.5840864678680839,
+   "median": 0.0
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "goal_diff",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0,
+   "median": 0.0
+  },
+  {
+   "profile": "terrible",
+   "brain": "new",
+   "metric": "goals",
+   "n": 10,
+   "mean": 0.7,
+   "ci_lo": 0.11106625841351403,
+   "ci_hi": 1.2889337415864859,
+   "median": 0.5
+  },
+  {
+   "profile": "terrible",
+   "brain": "pre",
+   "metric": "goals",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0,
+   "median": 0.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "n": 10,
+   "mean": 9.5987,
+   "ci_lo": 6.86069403809152,
+   "ci_hi": 12.336705961908478,
+   "median": 9.997
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "n": 10,
+   "mean": 19.3982,
+   "ci_lo": 12.378970730492453,
+   "ci_hi": 26.417429269507544,
+   "median": 17.25
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "n": 10,
+   "mean": 7.5489999999999995,
+   "ci_lo": 5.091668122144247,
+   "ci_hi": 10.006331877855752,
+   "median": 6.498,
+   "signal": "player_role"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "n": 10,
+   "mean": 19.3982,
+   "ci_lo": 12.378970730492453,
+   "ci_hi": 26.417429269507544,
+   "median": 17.25,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "n": 10,
+   "mean": 8.7987,
+   "ci_lo": 6.105531110803133,
+   "ci_hi": 11.491868889196867,
+   "median": 8.9985
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "n": 10,
+   "mean": 57.6416,
+   "ci_lo": 34.841612548474735,
+   "ci_hi": 80.44158745152527,
+   "median": 54.992000000000004
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "n": 10,
+   "mean": 161.9306,
+   "ci_lo": 92.09024382954446,
+   "ci_hi": 231.77095617045552,
+   "median": 163.962
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "n": 10,
+   "mean": 0.23847999999999997,
+   "ci_lo": 0.10216344130509836,
+   "ci_hi": 0.3747965586949016,
+   "median": 0.2663
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "n": 10,
+   "mean": 0.34866,
+   "ci_lo": 0.28545213533962344,
+   "ci_hi": 0.4118678646603766,
+   "median": 0.3316
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "n": 10,
+   "mean": 0.0717,
+   "ci_lo": -0.009775637884385333,
+   "ci_hi": 0.15317563788438532,
+   "median": 0.00485
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.0717,
+   "ci_lo": -0.009775637884385333,
+   "ci_hi": 0.15317563788438532,
+   "median": 0.00485,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.34866,
+   "ci_lo": 0.28545213533962344,
+   "ci_hi": 0.4118678646603766,
+   "median": 0.3316,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "n": 10,
+   "mean": 0.89599,
+   "ci_lo": 0.8295944352398497,
+   "ci_hi": 0.9623855647601502,
+   "median": 0.93685
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "n": 10,
+   "mean": 0.9634,
+   "ci_lo": 0.9422264291578374,
+   "ci_hi": 0.9845735708421627,
+   "median": 0.9658
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "n": 10,
+   "mean": 0.328,
+   "ci_lo": 0.03836534668886832,
+   "ci_hi": 0.6176346533111317,
+   "median": 0.17
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "n": 10,
+   "mean": 0.182,
+   "ci_lo": -0.04883857850031956,
+   "ci_hi": 0.4128385785003196,
+   "median": 0.1
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "n": 10,
+   "mean": 3.4904,
+   "ci_lo": 2.270936220869998,
+   "ci_hi": 4.709863779130002,
+   "median": 2.742
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "n": 10,
+   "mean": 3.4516,
+   "ci_lo": 1.9729720916999163,
+   "ci_hi": 4.9302279083000835,
+   "median": 3.75
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "reaction_censored",
+   "n": 10,
+   "mean": 3.5,
+   "ci_lo": 1.2567733554737361,
+   "ci_hi": 5.743226644526263,
+   "median": 3.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "n": 10,
+   "mean": 1.5,
+   "ci_lo": 0.6569438013658601,
+   "ci_hi": 2.34305619863414,
+   "median": 1.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "n": 10,
+   "mean": 0.0619,
+   "ci_lo": 0.0548759706413261,
+   "ci_hi": 0.0689240293586739,
+   "median": 0.0596
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "n": 10,
+   "mean": 0.05278000000000001,
+   "ci_lo": 0.045686631153739554,
+   "ci_hi": 0.05987336884626046,
+   "median": 0.05185
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "n": 10,
+   "mean": 0.08823,
+   "ci_lo": 0.07632661728339483,
+   "ci_hi": 0.10013338271660517,
+   "median": 0.0862
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "n": 10,
+   "mean": 0.07350999999999999,
+   "ci_lo": 0.054325939524036124,
+   "ci_hi": 0.09269406047596386,
+   "median": 0.06609999999999999
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "mode_healthy",
+   "n": 10,
+   "mean": 0.74674,
+   "ci_lo": 0.7336703251332458,
+   "ci_hi": 0.7598096748667541,
+   "median": 0.7386
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "mode_degraded",
+   "n": 10,
+   "mean": 0.01928,
+   "ci_lo": 0.016403154256964137,
+   "ci_hi": 0.02215684574303586,
+   "median": 0.0209
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "mode_isolated",
+   "n": 10,
+   "mean": 0.23391,
+   "ci_lo": 0.22358143915861448,
+   "ci_hi": 0.24423856084138554,
+   "median": 0.24065
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "goal_diff",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0,
+   "median": 0.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "goal_diff",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": -0.4769046039804426,
+   "ci_hi": 0.4769046039804426,
+   "median": 0.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "goals",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0,
+   "median": 0.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "goals",
+   "n": 10,
+   "mean": 0.2,
+   "ci_lo": -0.10162095503976037,
+   "ci_hi": 0.5016209550397603,
+   "median": 0.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_role_flips_per_min",
+   "n": 10,
+   "mean": 2.4429000000000003,
+   "ci_lo": 0.21603416776317452,
+   "ci_hi": 4.669765832236826,
+   "median": 2.007,
+   "signal": "player_role"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_role_flips_per_min",
+   "n": 10,
+   "mean": 21.0629,
+   "ci_lo": 15.513107279358625,
+   "ci_hi": 26.612692720641373,
+   "median": 20.0965,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_lead_changes_per_min",
+   "n": 10,
+   "mean": 4.3136,
+   "ci_lo": 1.1770877870301595,
+   "ci_hi": 7.450112212969841,
+   "median": 2.162
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.25457,
+   "ci_lo": -0.04897289848723707,
+   "ci_hi": 0.5581128984872371,
+   "median": 0.0,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.98356,
+   "ci_lo": 0.9729607911531557,
+   "ci_hi": 0.9941592088468443,
+   "median": 0.98395,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_reaction_median_s",
+   "n": 8,
+   "mean": 1.0574999999999999,
+   "ci_lo": -0.3132665950257816,
+   "ci_hi": 2.4282665950257813,
+   "median": 0.32
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_reaction_median_s",
+   "n": 7,
+   "mean": 0.09714285714285716,
+   "ci_lo": 0.056577963694181235,
+   "ci_hi": 0.13770775059153306,
+   "median": 0.08
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_reaction_p90_s",
+   "n": 8,
+   "mean": 2.3205,
+   "ci_lo": -0.07856746358432298,
+   "ci_hi": 4.7195674635843226,
+   "median": 0.484
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_reaction_p90_s",
+   "n": 7,
+   "mean": 0.4645714285714285,
+   "ci_lo": 0.15059260476361147,
+   "ci_hi": 0.7785502523792456,
+   "median": 0.304
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_reaction_censored",
+   "n": 10,
+   "mean": 0.8,
+   "ci_lo": 0.14263236886372987,
+   "ci_hi": 1.4573676311362702,
+   "median": 0.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_reaction_censored",
+   "n": 10,
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0,
+   "median": 0.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_role_flips_per_min",
+   "n": 10,
+   "mean": 9.182500000000001,
+   "ci_lo": 5.9613115259330645,
+   "ci_hi": 12.403688474066938,
+   "median": 7.327,
+   "signal": "player_role"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_role_flips_per_min",
+   "n": 10,
+   "mean": 18.7261,
+   "ci_lo": 9.449516672110716,
+   "ci_hi": 28.00268332788928,
+   "median": 15.6595,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_lead_changes_per_min",
+   "n": 10,
+   "mean": 10.2382,
+   "ci_lo": 7.2156680728881035,
+   "ci_hi": 13.260731927111898,
+   "median": 10.3245
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.01102,
+   "ci_lo": 0.002727425644326261,
+   "ci_hi": 0.01931257435567374,
+   "median": 0.0063999999999999994,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_duplicate_striker_frac",
+   "n": 10,
+   "mean": 0.13749,
+   "ci_lo": 0.05297870644956332,
+   "ci_hi": 0.22200129355043668,
+   "median": 0.11080000000000001,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_reaction_median_s",
+   "n": 10,
+   "mean": 0.314,
+   "ci_lo": 0.07755437179131827,
+   "ci_hi": 0.5504456282086817,
+   "median": 0.2
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_reaction_median_s",
+   "n": 10,
+   "mean": 0.19,
+   "ci_lo": -0.04704125847752194,
+   "ci_hi": 0.42704125847752195,
+   "median": 0.06
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_reaction_p90_s",
+   "n": 10,
+   "mean": 3.1208,
+   "ci_lo": 1.9986380553073617,
+   "ci_hi": 4.242961944692638,
+   "median": 2.408
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_reaction_p90_s",
+   "n": 10,
+   "mean": 3.5932000000000004,
+   "ci_lo": 2.1184653399473268,
+   "ci_hi": 5.067934660052674,
+   "median": 3.98
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_reaction_censored",
+   "n": 10,
+   "mean": 2.7,
+   "ci_lo": 0.8209111329829404,
+   "ci_hi": 4.5790888670170595,
+   "median": 2.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_reaction_censored",
+   "n": 10,
+   "mean": 1.6,
+   "ci_lo": 0.695137134880719,
+   "ci_hi": 2.5048628651192812,
+   "median": 1.5
+  }
+ ],
+ "tests": [
+  {
+   "profile": "good",
+   "metric": "chase_flips_per_min",
+   "pct_change": -37.63095262312089,
+   "p_mwu": 0.16197241048012603
+  },
+  {
+   "profile": "good",
+   "metric": "role_flips_per_min",
+   "pct_change": -42.03706340649729,
+   "p_mwu": 0.06362233260013422,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "good",
+   "metric": "decision_flips_per_min",
+   "pct_change": -62.412933610587054,
+   "p_mwu": 0.0013149446697132174
+  },
+  {
+   "profile": "good",
+   "metric": "duplicate_decision_frac",
+   "pct_change": -24.488941603293103,
+   "p_mwu": 0.7337299956962473
+  },
+  {
+   "profile": "good",
+   "metric": "duplicate_striker_frac",
+   "pct_change": -92.94634758947882,
+   "p_mwu": 0.008594218257731594,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "good",
+   "metric": "chaser_present_frac",
+   "pct_change": -2.744045203384011,
+   "p_mwu": 0.4271814860068012
+  },
+  {
+   "profile": "good",
+   "metric": "reaction_median_s",
+   "pct_change": 63.541666666666664,
+   "p_mwu": 0.5170362466603381
+  },
+  {
+   "profile": "good",
+   "metric": "reaction_p90_s",
+   "pct_change": -37.63536129159284,
+   "p_mwu": 0.04515456962427905
+  },
+  {
+   "profile": "good",
+   "metric": "reaction_censored",
+   "pct_change": 70.83333333333333,
+   "p_mwu": 0.1273790455002992
+  },
+  {
+   "profile": "good",
+   "metric": "fused_ball_err_m",
+   "pct_change": -18.153898652107145,
+   "p_mwu": 0.06402210128302695
+  },
+  {
+   "profile": "good",
+   "metric": "local_ball_err_m",
+   "pct_change": -15.364391628983068,
+   "p_mwu": 0.18587673236587593
+  },
+  {
+   "profile": "good",
+   "metric": "goal_diff",
+   "pct_change": null,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "good",
+   "metric": "goals",
+   "pct_change": 0.0,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "chase_flips_per_min",
+   "pct_change": -60.732958590048845,
+   "p_mwu": 0.00024480482452445554
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "role_flips_per_min",
+   "pct_change": -65.84640434636754,
+   "p_mwu": 0.00018063472080753556,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "decision_flips_per_min",
+   "pct_change": -67.59729355742573,
+   "p_mwu": 0.00018063472080753556
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "duplicate_decision_frac",
+   "pct_change": -21.126760563380294,
+   "p_mwu": 0.27303633975118824
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "duplicate_striker_frac",
+   "pct_change": -91.06625311435398,
+   "p_mwu": 0.0001826717911095504,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "chaser_present_frac",
+   "pct_change": -16.00494216832443,
+   "p_mwu": 0.1212245030129166
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "reaction_median_s",
+   "pct_change": -30.16393442622952,
+   "p_mwu": 0.2719522794479483
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "reaction_p90_s",
+   "pct_change": -12.713490692765312,
+   "p_mwu": 0.6231762238821174
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "reaction_censored",
+   "pct_change": 19.35483870967742,
+   "p_mwu": 0.7316843827746466
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "fused_ball_err_m",
+   "pct_change": -34.969400244798045,
+   "p_mwu": 0.0007685389131627682
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "local_ball_err_m",
+   "pct_change": -14.538124036523175,
+   "p_mwu": 0.05390255716938722
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "goal_diff",
+   "pct_change": null,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "goals",
+   "pct_change": null,
+   "p_mwu": 0.368120250693519
+  },
+  {
+   "profile": "terrible",
+   "metric": "chase_flips_per_min",
+   "pct_change": -66.15469600272675,
+   "p_mwu": 0.0001826717911095504
+  },
+  {
+   "profile": "terrible",
+   "metric": "role_flips_per_min",
+   "pct_change": -80.02280126464747,
+   "p_mwu": 0.00018063472080753556,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "terrible",
+   "metric": "decision_flips_per_min",
+   "pct_change": -55.30335075261634,
+   "p_mwu": 0.0001826717911095504
+  },
+  {
+   "profile": "terrible",
+   "metric": "duplicate_decision_frac",
+   "pct_change": -22.913613903561092,
+   "p_mwu": 0.21229383619233155
+  },
+  {
+   "profile": "terrible",
+   "metric": "duplicate_striker_frac",
+   "pct_change": -85.98739137842904,
+   "p_mwu": 0.0001826717911095504,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "terrible",
+   "metric": "chaser_present_frac",
+   "pct_change": 0.25202520252024546,
+   "p_mwu": 0.8501067391385257
+  },
+  {
+   "profile": "terrible",
+   "metric": "reaction_median_s",
+   "pct_change": 14.883720930232572,
+   "p_mwu": 0.5694411481691282
+  },
+  {
+   "profile": "terrible",
+   "metric": "reaction_p90_s",
+   "pct_change": -15.988636363636358,
+   "p_mwu": 0.570750388058174
+  },
+  {
+   "profile": "terrible",
+   "metric": "reaction_censored",
+   "pct_change": 242.8571428571429,
+   "p_mwu": 0.04484793751935209
+  },
+  {
+   "profile": "terrible",
+   "metric": "fused_ball_err_m",
+   "pct_change": -56.558408275476445,
+   "p_mwu": 0.0001826717911095504
+  },
+  {
+   "profile": "terrible",
+   "metric": "local_ball_err_m",
+   "pct_change": 5.237611468563049,
+   "p_mwu": 0.8501067391385257
+  },
+  {
+   "profile": "terrible",
+   "metric": "goal_diff",
+   "pct_change": null,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "terrible",
+   "metric": "goals",
+   "pct_change": null,
+   "p_mwu": 0.01460694212021616
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "chase_flips_per_min",
+   "pct_change": -50.5175737955068,
+   "p_mwu": 0.009056394245237374
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "role_flips_per_min",
+   "pct_change": -61.08401810477261,
+   "p_mwu": 0.0009947556027307244,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "decision_flips_per_min",
+   "pct_change": -64.40351607417004,
+   "p_mwu": 0.014019277113959961
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "duplicate_decision_frac",
+   "pct_change": -31.600986634543695,
+   "p_mwu": 0.21229383619233155
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "duplicate_striker_frac",
+   "pct_change": -79.43555326105663,
+   "p_mwu": 0.0005772900275846422,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "chaser_present_frac",
+   "pct_change": -6.997093626738642,
+   "p_mwu": 0.06392213460345464
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "reaction_median_s",
+   "pct_change": 80.21978021978023,
+   "p_mwu": 0.2862661088429601
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "reaction_p90_s",
+   "pct_change": 1.1241163518368342,
+   "p_mwu": 0.8797843010569927
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "reaction_censored",
+   "pct_change": 133.33333333333331,
+   "p_mwu": 0.1329484385278233
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "fused_ball_err_m",
+   "pct_change": 17.27927245168622,
+   "p_mwu": 0.037563471885898425
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "local_ball_err_m",
+   "pct_change": 20.024486464426623,
+   "p_mwu": 0.10410988966022679
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "goal_diff",
+   "pct_change": null,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "goals",
+   "pct_change": -100.0,
+   "p_mwu": 0.16748875557485465
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_role_flips_per_min",
+   "pct_change": -88.40188198206323,
+   "p_mwu": 0.00017167508717120343,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_duplicate_striker_frac",
+   "pct_change": -74.11749156126723,
+   "p_mwu": 0.002920933140349741,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_reaction_median_s",
+   "pct_change": 988.6029411764703,
+   "p_mwu": 0.24205030862442228
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_reaction_p90_s",
+   "pct_change": 399.4926199261994,
+   "p_mwu": 0.6022000059254969
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_reaction_censored",
+   "pct_change": null,
+   "p_mwu": 0.01460694212021616
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_role_flips_per_min",
+   "pct_change": -50.96416231890248,
+   "p_mwu": 0.020940353653959392,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_duplicate_striker_frac",
+   "pct_change": -91.98487162702742,
+   "p_mwu": 0.002816905628193751,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_reaction_median_s",
+   "pct_change": 65.26315789473685,
+   "p_mwu": 0.4431023319909091
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_reaction_p90_s",
+   "pct_change": -13.147055549371043,
+   "p_mwu": 0.7913367801006604
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_reaction_censored",
+   "pct_change": 68.75,
+   "p_mwu": 0.4418629394145385
+  }
+ ],
+ "sweeps": [
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 11.999749999999999,
+   "ci_lo": -3.947626428775953,
+   "ci_hi": 27.947126428775952
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 9.6665,
+   "ci_lo": -0.303961259729034,
+   "ci_hi": 19.636961259729034
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 11.333499999999999,
+   "ci_lo": -0.8538797887676797,
+   "ci_hi": 23.52087978876768
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 59.83325,
+   "ci_lo": 10.588630030652197,
+   "ci_hi": 109.0778699693478
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.1441,
+   "ci_lo": -0.0749552408379704,
+   "ci_hi": 0.3631552408379704
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.012,
+   "ci_lo": -0.021683855205224322,
+   "ci_hi": 0.04568385520522432
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.012,
+   "ci_lo": -0.021683855205224322,
+   "ci_hi": 0.04568385520522432
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.9611000000000001,
+   "ci_lo": 0.9139308562911268,
+   "ci_hi": 1.0082691437088733
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.53,
+   "ci_lo": -0.6611875689791877,
+   "ci_hi": 1.7211875689791878
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 3.473,
+   "ci_lo": 0.2148613742549479,
+   "ci_hi": 6.731138625745052
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 2.25,
+   "ci_lo": 0.7265198191711892,
+   "ci_hi": 3.7734801808288108
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.04975,
+   "ci_lo": 0.03951532986869637,
+   "ci_hi": 0.05998467013130364
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.1022,
+   "ci_lo": 0.039780498416857504,
+   "ci_hi": 0.16461950158314248
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "mode_healthy",
+   "mean": 0.9998750000000001,
+   "ci_lo": 0.9994771942118397,
+   "ci_hi": 1.0002728057881605
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 27.33325,
+   "ci_lo": 14.140725863826942,
+   "ci_hi": 40.525774136173055
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 27.33325,
+   "ci_lo": 14.140725863826942,
+   "ci_hi": 40.525774136173055
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 163.16649999999998,
+   "ci_lo": 119.63148883615351,
+   "ci_hi": 206.70151116384648
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.188,
+   "ci_lo": 0.009990649887400366,
+   "ci_hi": 0.3660093501125996
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.188,
+   "ci_lo": 0.009990649887400366,
+   "ci_hi": 0.3660093501125996
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.951975,
+   "ci_lo": 0.8789802935725826,
+   "ci_hi": 1.0249697064274175
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.11,
+   "ci_lo": -0.021215622645413837,
+   "ci_hi": 0.24121562264541385
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 3.53,
+   "ci_lo": 0.4151561228875176,
+   "ci_hi": 6.644843877112482
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 2.25,
+   "ci_lo": -2.3204405424864323,
+   "ci_hi": 6.820440542486432
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.05565,
+   "ci_lo": 0.04994891887185425,
+   "ci_hi": 0.061351081128145746
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.083575,
+   "ci_lo": 0.05511585788391496,
+   "ci_hi": 0.11203414211608503
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 0,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 8.50025,
+   "ci_lo": 5.10410773362259,
+   "ci_hi": 11.896392266377408
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 10.33325,
+   "ci_lo": 1.2283363441881807,
+   "ci_hi": 19.43816365581182
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 12.8335,
+   "ci_lo": 6.446060772590316,
+   "ci_hi": 19.220939227409687
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 51.5,
+   "ci_lo": 20.37387220705884,
+   "ci_hi": 82.62612779294116
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.075225,
+   "ci_lo": -0.037523341337517654,
+   "ci_hi": 0.18797334133751764
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.029775,
+   "ci_lo": 0.0037312654059339125,
+   "ci_hi": 0.05581873459406608
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.029775,
+   "ci_lo": 0.0037312654059339125,
+   "ci_hi": 0.05581873459406608
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.9410000000000001,
+   "ci_lo": 0.8783660123907552,
+   "ci_hi": 1.003633987609245
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.535,
+   "ci_lo": -0.06959500348667436,
+   "ci_hi": 1.1395950034866744
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 3.959,
+   "ci_lo": 1.385450166848977,
+   "ci_hi": 6.532549833151023
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 2.25,
+   "ci_lo": -0.13683472896277848,
+   "ci_hi": 4.6368347289627785
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.05995,
+   "ci_lo": 0.05683049909809624,
+   "ci_hi": 0.06306950090190376
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.0911,
+   "ci_lo": 0.07561027828934072,
+   "ci_hi": 0.10658972171065928
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "mode_healthy",
+   "mean": 0.975225,
+   "ci_lo": 0.9371759351824483,
+   "ci_hi": 1.0132740648175518
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "mode_degraded",
+   "mean": 0.03303333333333333,
+   "ci_lo": -0.019573133938860378,
+   "ci_hi": 0.08563980060552703
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 26.49325,
+   "ci_lo": 12.472747255407793,
+   "ci_hi": 40.51375274459221
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 26.49325,
+   "ci_lo": 12.472747255407793,
+   "ci_hi": 40.51375274459221
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 146.465,
+   "ci_lo": 100.13739915049291,
+   "ci_hi": 192.7926008495071
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.14915,
+   "ci_lo": -0.00921571983020103,
+   "ci_hi": 0.30751571983020104
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.14915,
+   "ci_lo": -0.00921571983020103,
+   "ci_hi": 0.30751571983020104
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.947225,
+   "ci_lo": 0.8827525891993636,
+   "ci_hi": 1.0116974108006362
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.965,
+   "ci_lo": -0.9624829629810089,
+   "ci_hi": 2.892482962981009
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 4.439,
+   "ci_lo": 1.3641381223590923,
+   "ci_hi": 7.513861877640908
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 0.75,
+   "ci_lo": -0.04561157632092616,
+   "ci_hi": 1.5456115763209262
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.091875,
+   "ci_lo": 0.06725218204487134,
+   "ci_hi": 0.11649781795512866
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.0952,
+   "ci_lo": 0.06518276560876692,
+   "ci_hi": 0.1252172343912331
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": -1.2992282636251096,
+   "ci_hi": 1.2992282636251096
+  },
+  {
+   "axis": "latency_ms",
+   "value": 150,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.25,
+   "ci_lo": -0.5456115763209262,
+   "ci_hi": 1.0456115763209262
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 8.50025,
+   "ci_lo": 5.10410773362259,
+   "ci_hi": 11.896392266377408
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 10.33325,
+   "ci_lo": 1.2283363441881807,
+   "ci_hi": 19.43816365581182
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 12.8335,
+   "ci_lo": 6.446060772590316,
+   "ci_hi": 19.220939227409687
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 51.5,
+   "ci_lo": 20.37387220705884,
+   "ci_hi": 82.62612779294116
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.075225,
+   "ci_lo": -0.037523341337517654,
+   "ci_hi": 0.18797334133751764
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.029775,
+   "ci_lo": 0.0037312654059339125,
+   "ci_hi": 0.05581873459406608
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.029775,
+   "ci_lo": 0.0037312654059339125,
+   "ci_hi": 0.05581873459406608
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.9410000000000001,
+   "ci_lo": 0.8783660123907552,
+   "ci_hi": 1.003633987609245
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.535,
+   "ci_lo": -0.06959500348667436,
+   "ci_hi": 1.1395950034866744
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 3.959,
+   "ci_lo": 1.385450166848977,
+   "ci_hi": 6.532549833151023
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 2.25,
+   "ci_lo": -0.13683472896277848,
+   "ci_hi": 4.6368347289627785
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.05995,
+   "ci_lo": 0.05683049909809624,
+   "ci_hi": 0.06306950090190376
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.0911,
+   "ci_lo": 0.07561027828934072,
+   "ci_hi": 0.10658972171065928
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "mode_healthy",
+   "mean": 0.975225,
+   "ci_lo": 0.9371759351824483,
+   "ci_hi": 1.0132740648175518
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "mode_degraded",
+   "mean": 0.03303333333333333,
+   "ci_lo": -0.019573133938860378,
+   "ci_hi": 0.08563980060552703
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 26.49325,
+   "ci_lo": 12.472747255407793,
+   "ci_hi": 40.51375274459221
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 26.49325,
+   "ci_lo": 12.472747255407793,
+   "ci_hi": 40.51375274459221
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 146.465,
+   "ci_lo": 100.13739915049291,
+   "ci_hi": 192.7926008495071
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.14915,
+   "ci_lo": -0.00921571983020103,
+   "ci_hi": 0.30751571983020104
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.14915,
+   "ci_lo": -0.00921571983020103,
+   "ci_hi": 0.30751571983020104
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.947225,
+   "ci_lo": 0.8827525891993636,
+   "ci_hi": 1.0116974108006362
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.965,
+   "ci_lo": -0.9624829629810089,
+   "ci_hi": 2.892482962981009
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 4.439,
+   "ci_lo": 1.3641381223590923,
+   "ci_hi": 7.513861877640908
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 0.75,
+   "ci_lo": -0.04561157632092616,
+   "ci_hi": 1.5456115763209262
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.091875,
+   "ci_lo": 0.06725218204487134,
+   "ci_hi": 0.11649781795512866
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.0952,
+   "ci_lo": 0.06518276560876692,
+   "ci_hi": 0.1252172343912331
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": -1.2992282636251096,
+   "ci_hi": 1.2992282636251096
+  },
+  {
+   "axis": "loss_pct",
+   "value": 15,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.25,
+   "ci_lo": -0.5456115763209262,
+   "ci_hi": 1.0456115763209262
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 5.66675,
+   "ci_lo": -6.2253569398210065,
+   "ci_hi": 17.558856939821005
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 8.33325,
+   "ci_lo": 1.8226743929025018,
+   "ci_hi": 14.843825607097497
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 6.33325,
+   "ci_lo": -1.7223028564869978,
+   "ci_hi": 14.388802856486997
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 39.0,
+   "ci_lo": -14.691256645623142,
+   "ci_hi": 92.69125664562314
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.05245,
+   "ci_lo": -0.1106727263587935,
+   "ci_hi": 0.2155727263587935
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.0066749999999999995,
+   "ci_lo": -0.004146389900421041,
+   "ci_hi": 0.01749638990042104
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.0066749999999999995,
+   "ci_lo": -0.004146389900421041,
+   "ci_hi": 0.01749638990042104
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.526675,
+   "ci_lo": -0.24680204204535794,
+   "ci_hi": 1.300152042045358
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.2,
+   "ci_lo": -0.25006587264563623,
+   "ci_hi": 0.6500658726456363
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 0.85,
+   "ci_lo": -0.4050464328951443,
+   "ci_hi": 2.1050464328951444
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 1.5,
+   "ci_lo": -1.256079346555615,
+   "ci_hi": 4.256079346555615
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.047875,
+   "ci_lo": -0.0070713547784210865,
+   "ci_hi": 0.10282135477842108
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.062675,
+   "ci_lo": -0.0034261507366663974,
+   "ci_hi": 0.12877615073666637
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "mode_degraded",
+   "mean": 0.9977,
+   "ci_lo": 0.9909078811675742,
+   "ci_hi": 1.0044921188324258
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "mode_isolated",
+   "mean": 0.0084,
+   "ci_lo": null,
+   "ci_hi": null
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 22.5,
+   "ci_lo": 10.803208922156735,
+   "ci_hi": 34.196791077843265
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 22.5,
+   "ci_lo": 10.803208922156735,
+   "ci_hi": 34.196791077843265
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 156.83325,
+   "ci_lo": 72.33406937455545,
+   "ci_hi": 241.33243062544454
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.22455,
+   "ci_lo": -0.046153757121740274,
+   "ci_hi": 0.49525375712174025
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.22455,
+   "ci_lo": -0.046153757121740274,
+   "ci_hi": 0.49525375712174025
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.9251,
+   "ci_lo": 0.8544087287072518,
+   "ci_hi": 0.9957912712927482
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.115,
+   "ci_lo": -0.12927564504762223,
+   "ci_hi": 0.3592756450476222
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 3.593,
+   "ci_lo": 2.392475120548429,
+   "ci_hi": 4.793524879451571
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 0.75,
+   "ci_lo": -0.04561157632092616,
+   "ci_hi": 1.5456115763209262
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.11005000000000001,
+   "ci_lo": 0.08857634676917298,
+   "ci_hi": 0.13152365323082704
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.075075,
+   "ci_lo": 0.061685146329363436,
+   "ci_hi": 0.08846485367063657
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 300,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 12.0,
+   "ci_lo": 4.857106023628093,
+   "ci_hi": 19.14289397637191
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 14.333,
+   "ci_lo": 10.224479486478963,
+   "ci_hi": 18.441520513521038
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 11.667,
+   "ci_lo": 5.573079276684757,
+   "ci_hi": 17.760920723315245
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 70.5,
+   "ci_lo": 16.53837535101865,
+   "ci_hi": 124.46162464898134
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.09465,
+   "ci_lo": 0.01963934002306454,
+   "ci_hi": 0.16966065997693547
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.043,
+   "ci_lo": 0.012827399056313023,
+   "ci_hi": 0.07317260094368697
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.043,
+   "ci_lo": 0.012827399056313023,
+   "ci_hi": 0.07317260094368697
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.8609,
+   "ci_lo": 0.6721509724640529,
+   "ci_hi": 1.0496490275359471
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.31,
+   "ci_lo": -0.11339694307168313,
+   "ci_hi": 0.7333969430716831
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 4.376,
+   "ci_lo": 1.2750319844890012,
+   "ci_hi": 7.476968015511
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 2.0,
+   "ci_lo": 0.7007717363748904,
+   "ci_hi": 3.2992282636251096
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.073175,
+   "ci_lo": 0.03177212474818595,
+   "ci_hi": 0.11457787525181407
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.073175,
+   "ci_lo": 0.03177212474818595,
+   "ci_hi": 0.11457787525181407
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "mode_degraded",
+   "mean": 0.0063,
+   "ci_lo": -0.052148541786403435,
+   "ci_hi": 0.06474854178640344
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "mode_isolated",
+   "mean": 0.996775,
+   "ci_lo": 0.9885483352635963,
+   "ci_hi": 1.0050016647364035
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 32.0,
+   "ci_lo": 17.89987789105389,
+   "ci_hi": 46.10012210894611
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 32.0,
+   "ci_lo": 17.89987789105389,
+   "ci_hi": 46.10012210894611
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 162.16675,
+   "ci_lo": 104.05434917499271,
+   "ci_hi": 220.27915082500732
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.22075,
+   "ci_lo": 0.15093143866441736,
+   "ci_hi": 0.2905685613355826
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.22075,
+   "ci_lo": 0.15093143866441736,
+   "ci_hi": 0.2905685613355826
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.93535,
+   "ci_lo": 0.8648454057567163,
+   "ci_hi": 1.0058545942432837
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.265,
+   "ci_lo": -0.06303905661353454,
+   "ci_hi": 0.5930390566135346
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 3.588,
+   "ci_lo": 1.3543065544754591,
+   "ci_hi": 5.8216934455245415
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 2.0,
+   "ci_lo": -0.2503293632281811,
+   "ci_hi": 4.250329363228181
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.18837500000000001,
+   "ci_lo": 0.1603790048994718,
+   "ci_hi": 0.21637099510052824
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.08635000000000001,
+   "ci_lo": 0.054576895334974736,
+   "ci_hi": 0.11812310466502529
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": -1.2992282636251096,
+   "ci_hi": 1.2992282636251096
+  },
+  {
+   "axis": "latency_ms",
+   "value": 600,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.25,
+   "ci_lo": -0.5456115763209262,
+   "ci_hi": 1.0456115763209262
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 9.16425,
+   "ci_lo": -0.5691738289616595,
+   "ci_hi": 18.897673828961658
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 10.997,
+   "ci_lo": 2.946440386615544,
+   "ci_hi": 19.047559613384458
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 7.498,
+   "ci_lo": -0.6882848072340417,
+   "ci_hi": 15.684284807234043
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 72.31425,
+   "ci_lo": 3.0362551225600924,
+   "ci_hi": 141.5922448774399
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.1443,
+   "ci_lo": -0.0658558644732607,
+   "ci_hi": 0.3544558644732607
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.038974999999999996,
+   "ci_lo": -0.01725988206701233,
+   "ci_hi": 0.09520988206701232
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.038974999999999996,
+   "ci_lo": -0.01725988206701233,
+   "ci_hi": 0.09520988206701232
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.9547749999999999,
+   "ci_lo": 0.8771091409712327,
+   "ci_hi": 1.032440859028767
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.265,
+   "ci_lo": -0.08106817254280174,
+   "ci_hi": 0.6110681725428018
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 5.534000000000001,
+   "ci_lo": 4.333248768363617,
+   "ci_hi": 6.734751231636384
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 2.75,
+   "ci_lo": -1.2280578816046308,
+   "ci_hi": 6.728057881604631
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.08145,
+   "ci_lo": 0.07507781845687751,
+   "ci_hi": 0.08782218154312248
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.08145,
+   "ci_lo": 0.07507781845687751,
+   "ci_hi": 0.08782218154312248
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "mode_isolated",
+   "mean": 0.99995,
+   "ci_lo": 0.9997908776847358,
+   "ci_hi": 1.0001091223152643
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": -1.2992282636251096,
+   "ci_hi": 1.2992282636251096
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.25,
+   "ci_lo": -0.5456115763209262,
+   "ci_hi": 1.0456115763209262
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 43.32375,
+   "ci_lo": 22.957236484148364,
+   "ci_hi": 63.690263515851626
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 43.32375,
+   "ci_lo": 22.957236484148364,
+   "ci_hi": 63.690263515851626
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 250.4485,
+   "ci_lo": 75.20438726519163,
+   "ci_hi": 425.69261273480834
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.462225,
+   "ci_lo": 0.2311974307933785,
+   "ci_hi": 0.6932525692066215
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.462225,
+   "ci_lo": 0.2311974307933785,
+   "ci_hi": 0.6932525692066215
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.923375,
+   "ci_lo": 0.8909730246198041,
+   "ci_hi": 0.9557769753801958
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.47500000000000003,
+   "ci_lo": 0.05090594282541894,
+   "ci_hi": 0.8990940571745811
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 3.465,
+   "ci_lo": 1.3813788999696093,
+   "ci_hi": 5.54862110003039
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 2.0,
+   "ci_lo": 0.7007717363748904,
+   "ci_hi": 3.2992282636251096
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.209775,
+   "ci_lo": 0.17959586123953478,
+   "ci_hi": 0.2399541387604652
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.0844,
+   "ci_lo": 0.07212108997853935,
+   "ci_hi": 0.09667891002146066
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": -1.2992282636251096,
+   "ci_hi": 1.2992282636251096
+  },
+  {
+   "axis": "latency_ms",
+   "value": 1000,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.25,
+   "ci_lo": -0.5456115763209262,
+   "ci_hi": 1.0456115763209262
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 10.1665,
+   "ci_lo": 1.0255881223129233,
+   "ci_hi": 19.307411877687073
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 8.66675,
+   "ci_lo": -0.7020581927781091,
+   "ci_hi": 18.03555819277811
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 7.66675,
+   "ci_lo": 2.728789908245285,
+   "ci_hi": 12.604710091754715
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 58.0,
+   "ci_lo": 1.1827576446788868,
+   "ci_hi": 114.81724235532111
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.20145,
+   "ci_lo": -0.04703923405813462,
+   "ci_hi": 0.44993923405813463
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.02935,
+   "ci_lo": -0.023756898896383473,
+   "ci_hi": 0.08245689889638347
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.02935,
+   "ci_lo": -0.023756898896383473,
+   "ci_hi": 0.08245689889638347
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.9509,
+   "ci_lo": 0.8882598141676422,
+   "ci_hi": 1.0135401858323578
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.535,
+   "ci_lo": -0.45014577442746107,
+   "ci_hi": 1.5201457744274611
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 3.717,
+   "ci_lo": -0.41065575907076246,
+   "ci_hi": 7.844655759070763
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 1.5,
+   "ci_lo": -0.5542602567605188,
+   "ci_hi": 3.554260256760519
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.0674,
+   "ci_lo": 0.054123692458433265,
+   "ci_hi": 0.08067630754156674
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.07935,
+   "ci_lo": 0.059470321576678684,
+   "ci_hi": 0.09922967842332132
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "mode_healthy",
+   "mean": 0.99995,
+   "ci_lo": 0.9997908776847358,
+   "ci_hi": 1.0001091223152643
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 22.5,
+   "ci_lo": 4.97529904037448,
+   "ci_hi": 40.02470095962552
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 22.5,
+   "ci_lo": 4.97529904037448,
+   "ci_hi": 40.02470095962552
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 106.5,
+   "ci_lo": 57.141825986704184,
+   "ci_hi": 155.8581740132958
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.20600000000000002,
+   "ci_lo": -0.21393390961340564,
+   "ci_hi": 0.6259339096134057
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.20600000000000002,
+   "ci_lo": -0.21393390961340564,
+   "ci_hi": 0.6259339096134057
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.9438,
+   "ci_lo": 0.8656201334883276,
+   "ci_hi": 1.0219798665116724
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.56,
+   "ci_lo": -0.5702539185964159,
+   "ci_hi": 1.690253918596416
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 4.001,
+   "ci_lo": 1.5280207871094977,
+   "ci_hi": 6.473979212890503
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 1.25,
+   "ci_lo": -0.7522452253359235,
+   "ci_hi": 3.2522452253359235
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.096075,
+   "ci_lo": 0.06930415808292616,
+   "ci_hi": 0.12284584191707383
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.120325,
+   "ci_lo": 0.044211247657715516,
+   "ci_hi": 0.19643875234228447
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 0,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 14.33325,
+   "ci_lo": -3.7841246549821435,
+   "ci_hi": 32.45062465498214
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 9.1665,
+   "ci_lo": 4.472087039804204,
+   "ci_hi": 13.860912960195794
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 11.167,
+   "ci_lo": -0.2706370495692685,
+   "ci_hi": 22.60463704956927
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 75.0,
+   "ci_lo": -11.31353106868076,
+   "ci_hi": 161.31353106868076
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.24225,
+   "ci_lo": -0.09407032476777463,
+   "ci_hi": 0.5785703247677746
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.053024999999999996,
+   "ci_lo": -0.023931370258426322,
+   "ci_hi": 0.12998137025842632
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.053024999999999996,
+   "ci_lo": -0.023931370258426322,
+   "ci_hi": 0.12998137025842632
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.940775,
+   "ci_lo": 0.8461923982115855,
+   "ci_hi": 1.0353576017884145
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.28,
+   "ci_lo": -0.41529957917365634,
+   "ci_hi": 0.9752995791736564
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 2.386,
+   "ci_lo": -1.0411050920071698,
+   "ci_hi": 5.81310509200717
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 4.25,
+   "ci_lo": 0.9696094338646546,
+   "ci_hi": 7.530390566135345
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.0623,
+   "ci_lo": 0.04912964420511739,
+   "ci_hi": 0.07547035579488262
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.0772,
+   "ci_lo": 0.0578650562680006,
+   "ci_hi": 0.09653494373199942
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "mode_healthy",
+   "mean": 0.081775,
+   "ci_lo": -0.0007711356878480347,
+   "ci_hi": 0.16432113568784804
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "mode_degraded",
+   "mean": 0.917975,
+   "ci_lo": 0.8358012644630719,
+   "ci_hi": 1.000148735536928
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": -1.2992282636251096,
+   "ci_hi": 1.2992282636251096
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.25,
+   "ci_lo": -0.5456115763209262,
+   "ci_hi": 1.0456115763209262
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 38.5,
+   "ci_lo": 21.562782320677407,
+   "ci_hi": 55.43721767932259
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 38.5,
+   "ci_lo": 21.562782320677407,
+   "ci_hi": 55.43721767932259
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 195.66675,
+   "ci_lo": 110.83484128530998,
+   "ci_hi": 280.49865871469
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.34355,
+   "ci_lo": 0.12655069944308467,
+   "ci_hi": 0.5605493005569153
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.34355,
+   "ci_lo": 0.12655069944308467,
+   "ci_hi": 0.5605493005569153
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.9512,
+   "ci_lo": 0.8862126074483074,
+   "ci_hi": 1.0161873925516927
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.615,
+   "ci_lo": 0.010404996513325604,
+   "ci_hi": 1.2195950034866745
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 3.549,
+   "ci_lo": 2.2413656397287927,
+   "ci_hi": 4.856634360271207
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 2.25,
+   "ci_lo": 0.7265198191711892,
+   "ci_hi": 3.7734801808288108
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.10414999999999999,
+   "ci_lo": 0.06667441440932065,
+   "ci_hi": 0.14162558559067934
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.098125,
+   "ci_lo": 0.07331471480300744,
+   "ci_hi": 0.12293528519699257
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": -1.8373862310370768,
+   "ci_hi": 1.8373862310370768
+  },
+  {
+   "axis": "loss_pct",
+   "value": 30,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.5,
+   "ci_lo": -0.4186931155185384,
+   "ci_hi": 1.4186931155185385
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 10.1645,
+   "ci_lo": 0.4280566502417802,
+   "ci_hi": 19.900943349758222
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 11.3305,
+   "ci_lo": 6.066315418094234,
+   "ci_hi": 16.594684581905767
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 8.498000000000001,
+   "ci_lo": 1.1304084909136503,
+   "ci_hi": 15.865591509086352
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 56.98675,
+   "ci_lo": 6.974009714926261,
+   "ci_hi": 106.99949028507373
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.158425,
+   "ci_lo": -0.2438702511134532,
+   "ci_hi": 0.5607202511134532
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.013125000000000001,
+   "ci_lo": 0.0008809367728021128,
+   "ci_hi": 0.02536906322719789
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.013125000000000001,
+   "ci_lo": 0.0008809367728021128,
+   "ci_hi": 0.02536906322719789
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.9495750000000001,
+   "ci_lo": 0.901895557485343,
+   "ci_hi": 0.9972544425146571
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.6900000000000001,
+   "ci_lo": -1.2993895853547723,
+   "ci_hi": 2.6793895853547727
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 2.862,
+   "ci_lo": 0.46587645819444434,
+   "ci_hi": 5.258123541805556
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 3.25,
+   "ci_lo": 0.5324691162039876,
+   "ci_hi": 5.967530883796012
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.085725,
+   "ci_lo": 0.05002165533695304,
+   "ci_hi": 0.12142834466304694
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.0855,
+   "ci_lo": 0.03129695047393235,
+   "ci_hi": 0.13970304952606766
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "mode_healthy",
+   "mean": 0.007,
+   "ci_lo": null,
+   "ci_hi": null
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "mode_degraded",
+   "mean": 0.9982,
+   "ci_lo": 0.9926817200849103,
+   "ci_hi": 1.0037182799150897
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 48.6665,
+   "ci_lo": 26.229823037616153,
+   "ci_hi": 71.10317696238384
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 48.6665,
+   "ci_lo": 26.229823037616153,
+   "ci_hi": 71.10317696238384
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 231.1665,
+   "ci_lo": 143.03861580444004,
+   "ci_hi": 319.29438419556
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.2683,
+   "ci_lo": 0.1359137400476482,
+   "ci_hi": 0.40068625995235174
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.2683,
+   "ci_lo": 0.1359137400476482,
+   "ci_hi": 0.40068625995235174
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.950225,
+   "ci_lo": 0.8924162950177591,
+   "ci_hi": 1.0080337049822408
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.5549999999999999,
+   "ci_lo": 0.2869997236071413,
+   "ci_hi": 0.8230002763928586
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 3.21,
+   "ci_lo": 1.6992036549119756,
+   "ci_hi": 4.720796345088024
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 1.5,
+   "ci_lo": -1.256079346555615,
+   "ci_hi": 4.256079346555615
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.091125,
+   "ci_lo": 0.07391359647637938,
+   "ci_hi": 0.10833640352362062
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.1059,
+   "ci_lo": 0.07745461438601225,
+   "ci_hi": 0.13434538561398773
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 45,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "mean": 14.3335,
+   "ci_lo": 3.057026922747008,
+   "ci_hi": 25.609973077252995
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "mean": 11.3335,
+   "ci_lo": 9.396627995618669,
+   "ci_hi": 13.270372004381333
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "mean": 12.5,
+   "ci_lo": 2.8406167143000243,
+   "ci_hi": 22.159383285699974
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "mean": 99.66675000000001,
+   "ci_lo": -6.942250079752057,
+   "ci_hi": 206.27575007975207
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.26222500000000004,
+   "ci_lo": -0.08534848701501646,
+   "ci_hi": 0.6097984870150166
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "mean": 0.039125,
+   "ci_lo": -0.008734833452233387,
+   "ci_hi": 0.08698483345223339
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.039125,
+   "ci_lo": -0.008734833452233387,
+   "ci_hi": 0.08698483345223339
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "mean": 0.927975,
+   "ci_lo": 0.8579935707695918,
+   "ci_hi": 0.9979564292304082
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "mean": 0.225,
+   "ci_lo": -0.02338716484680667,
+   "ci_hi": 0.47338716484680665
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "mean": 2.35,
+   "ci_lo": -1.5899507854070198,
+   "ci_hi": 6.2899507854070205
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "reaction_censored",
+   "mean": 0.25,
+   "ci_lo": -0.5456115763209262,
+   "ci_hi": 1.0456115763209262
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "mean": 0.082625,
+   "ci_lo": 0.07926109002490862,
+   "ci_hi": 0.08598890997509138
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "mean": 0.090375,
+   "ci_lo": 0.05377286082416885,
+   "ci_hi": 0.12697713917583114
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "mode_degraded",
+   "mean": 0.99585,
+   "ci_lo": 0.9831717021503892,
+   "ci_hi": 1.0085282978496108
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "mode_isolated",
+   "mean": 0.0159,
+   "ci_lo": null,
+   "ci_hi": null
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": -1.8373862310370768,
+   "ci_hi": 1.8373862310370768
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "new",
+   "metric": "goals",
+   "mean": 0.5,
+   "ci_lo": -0.4186931155185384,
+   "ci_hi": 1.4186931155185385
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "mean": 84.66675000000001,
+   "ci_lo": 73.60817095257535,
+   "ci_hi": 95.72532904742467
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "mean": 84.66675000000001,
+   "ci_lo": 73.60817095257535,
+   "ci_hi": 95.72532904742467
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "mean": 316.66650000000004,
+   "ci_lo": 143.67896563058477,
+   "ci_hi": 489.6540343694153
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "mean": 0.506425,
+   "ci_lo": 0.23660070695591234,
+   "ci_hi": 0.7762492930440876
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "mean": 0.506425,
+   "ci_lo": 0.23660070695591234,
+   "ci_hi": 0.7762492930440876
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "mean": 0.93745,
+   "ci_lo": 0.8910490852429733,
+   "ci_hi": 0.9838509147570267
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "mean": 0.9349999999999999,
+   "ci_lo": -0.6409537084200027,
+   "ci_hi": 2.5109537084200024
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "mean": 3.55,
+   "ci_lo": 1.0168766923781791,
+   "ci_hi": 6.08312330762182
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "mean": 0.25,
+   "ci_lo": -0.5456115763209262,
+   "ci_hi": 1.0456115763209262
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "mean": 0.091875,
+   "ci_lo": 0.07331950262914394,
+   "ci_hi": 0.11043049737085606
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "mean": 0.080825,
+   "ci_lo": 0.04629891029900968,
+   "ci_hi": 0.11535108970099031
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "goal_diff",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  },
+  {
+   "axis": "loss_pct",
+   "value": 60,
+   "brain": "pre",
+   "metric": "goals",
+   "mean": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0
+  }
+ ]
+}
