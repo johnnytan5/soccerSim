@@ -64,16 +64,25 @@ custom_args() {
 robot_list() { if [ "${1:-all}" = all ]; then seq 1 "$N"; else echo "$1" | tr ',' ' '; fi; }
 
 # prio qdisc whose bands all default to band 1 (untouched traffic); netem sits on band 3, u32 filters send team UDP there.
+# Fast path: when the structure from an earlier apply is in place only the netem leaf is changed (`tc qdisc change`), the
+# u32 filters are never touched, so team packets cannot bypass netem during a blackout / revert. Otherwise the whole
+# structure is built with one `tc -batch` per device.
 setup_dev() {  # <runner...> dev netem-args
   local dev="$2" args="$3"; local -a run=($1)
-  "${run[@]}" tc qdisc replace dev "$dev" root handle 1: prio bands 3 priomap 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-  "${run[@]}" tc qdisc replace dev "$dev" parent 1:3 handle 30: netem $args
-  "${run[@]}" tc filter del dev "$dev" parent 1: 2>/dev/null || true
+  if "${run[@]}" tc qdisc show dev "$dev" 2>/dev/null | grep -q "qdisc netem 30: parent 1:3" \
+     && "${run[@]}" tc filter show dev "$dev" parent 1: 2>/dev/null | grep -q "flowid 1:3" \
+     && "${run[@]}" tc qdisc change dev "$dev" parent 1:3 handle 30: netem $args 2>/dev/null; then
+    return 0
+  fi
   local p
-  for p in $TEAM_PORTS; do
-    "${run[@]}" tc filter add dev "$dev" parent 1: protocol ip prio 1 u32 \
-      match ip protocol 17 0xff match ip dport "$p" 0xffff flowid 1:3
-  done
+  {
+    echo "qdisc replace dev $dev root handle 1: prio bands 3 priomap 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+    echo "qdisc replace dev $dev parent 1:3 handle 30: netem $args"
+    echo "filter del dev $dev parent 1:"
+    for p in $TEAM_PORTS; do
+      echo "filter add dev $dev parent 1: protocol ip prio 1 u32 match ip protocol 17 0xff match ip dport $p 0xffff flowid 1:3"
+    done
+  } | "${run[@]}" tc -force -batch -
 }
 
 cur_profile() { cat "$STATE/r$1" 2>/dev/null || echo none; }
@@ -83,13 +92,16 @@ setup_ingress() {  # <robot> netem-args
   local i="$1" args="$2" p
   inns "$i" ip link show "$IP$i" >/dev/null 2>&1 || inns "$i" ip link add "$IP$i" type ifb
   inns "$i" ip link set "$IP$i" up
-  inns "$i" tc qdisc replace dev "$VP$i" handle ffff: ingress
-  inns "$i" tc filter del dev "$VP$i" parent ffff: 2>/dev/null || true
-  for p in $TEAM_PORTS; do
-    inns "$i" tc filter add dev "$VP$i" parent ffff: protocol ip prio 1 u32 \
-      match ip protocol 17 0xff match ip dport "$p" 0xffff \
-      action mirred egress redirect dev "$IP$i"
-  done
+  if ! { inns "$i" tc qdisc show dev "$VP$i" | grep -q "ingress ffff:" \
+         && inns "$i" tc filter show dev "$VP$i" parent ffff: | grep -q mirred; }; then   # only (re)build when missing
+    inns "$i" tc qdisc replace dev "$VP$i" handle ffff: ingress
+    inns "$i" tc filter del dev "$VP$i" parent ffff: 2>/dev/null || true
+    for p in $TEAM_PORTS; do
+      inns "$i" tc filter add dev "$VP$i" parent ffff: protocol ip prio 1 u32 \
+        match ip protocol 17 0xff match ip dport "$p" 0xffff \
+        action mirred egress redirect dev "$IP$i"
+    done
+  fi
   setup_dev "$SUDO ip netns exec $NSP$i" "$IP$i" "$args"
 }
 
@@ -145,21 +157,28 @@ cmd_apply() {
   profile_args "$base" >/dev/null
   [ -z "$dur" ] || [ "$base" = blackout ] || { echo "duration only applies to blackout" >&2; exit 2; }
   mkdir -p "$STATE"
+  local -a pids=(); local rc=0 p
+  # every robot in parallel (each does ~10 tc calls): a transition then takes about one robot's time, not N times it
   for r in $(robot_list "${2:-all}"); do
     ip netns list | grep -q "^$NSP$r\b" || { echo "$NSP$r missing: run '$0 up' first" >&2; exit 1; }
-    local prev; prev="$(cur_profile "$r")"
-    apply_one "$r" "$base"
-    if [ "$base" = blackout ]; then
-      [ "${prev%%:*}" = blackout ] && prev="$(cat "$STATE/r$r.prev" 2>/dev/null || echo good)" || echo "$prev" > "$STATE/r$r.prev"
-    fi
-    echo "$base" > "$STATE/r$r"
-    echo "$NSP$r: $base"
+    (
+      prev="$(cur_profile "$r")"
+      apply_one "$r" "$base"
+      if [ "$base" = blackout ]; then
+        [ "${prev%%:*}" = blackout ] && prev="$(cat "$STATE/r$r.prev" 2>/dev/null || echo good)" || echo "$prev" > "$STATE/r$r.prev"
+      fi
+      echo "$base" > "$STATE/r$r"
+      echo "$NSP$r: $base"
+    ) &
+    pids+=($!)
   done
+  for p in "${pids[@]}"; do wait "$p" || rc=1; done
+  [ "$rc" = 0 ] || { echo "apply failed on at least one robot" >&2; exit 1; }
   if [ -n "$dur" ]; then   # revert each robot to the profile it had before the blackout
     local list; list="$(robot_list "${2:-all}" | tr '\n' ',' | sed 's/,$//')"
     ( sleep "$dur"; for r in $(robot_list "$list"); do
-        [ "$(cur_profile "$r")" = blackout ] && "$0" apply "$(cat "$STATE/r$r.prev" 2>/dev/null || echo good)" "$r" >/dev/null
-      done ) >/dev/null 2>&1 &
+        [ "$(cur_profile "$r")" = blackout ] && "$0" apply "$(cat "$STATE/r$r.prev" 2>/dev/null || echo good)" "$r" >/dev/null &
+      done; wait ) >/dev/null 2>&1 &
     echo "blackout reverts in ${dur}s"
   fi
 }
