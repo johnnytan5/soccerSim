@@ -5,6 +5,7 @@ range from the bbox-centre ray intersected with the plane z = ball radius
 (BallPoseEstimator::EstimateByColor; use_depth is false for the ball in vision.yaml).
 """
 
+import os
 from dataclasses import dataclass
 
 import cv2
@@ -72,14 +73,32 @@ def ground_point_at_height(cam: Camera, u: float, v: float, z: float) -> np.ndar
     return cam.pos + t * ray if t > 0.0 else None
 
 
+def select_providers(mode: str, available: list[str]) -> tuple[list[str], int]:
+    """(providers, intra-op threads) for SIM_YOLO_PROVIDER = auto | cuda | cpu. auto: CUDA when onnxruntime has it, else CPU.
+    cuda raises when it is not available. CUDA runs the graph on the GPU, so a single host thread is enough."""
+    mode = (mode or "auto").strip().lower()
+    if mode not in ("auto", "cuda", "cpu"):
+        raise ValueError(f"SIM_YOLO_PROVIDER must be auto, cuda or cpu, not '{mode}'")
+    has_cuda = "CUDAExecutionProvider" in available
+    if mode == "cuda" and not has_cuda:
+        raise RuntimeError("SIM_YOLO_PROVIDER=cuda but onnxruntime has no CUDAExecutionProvider (use `pixi run -e gpu`)")
+    if mode == "cpu" or not has_cuda:
+        return ["CPUExecutionProvider"], 4
+    return ["CUDAExecutionProvider", "CPUExecutionProvider"], 1
+
+
 class YoloBallDetector:
     def __init__(self, model_path: str, conf_thresh: float = 0.4, nms_iou: float = 0.4):
+        providers, threads = select_providers(os.environ.get("SIM_YOLO_PROVIDER", "auto"), ort.get_available_providers())
         # ORT defaults to one spinning thread per core, which starves the sim, brain and renderer on a busy desktop.
         opts = ort.SessionOptions()
-        opts.intra_op_num_threads = 4
+        opts.intra_op_num_threads = threads
         opts.inter_op_num_threads = 1
         opts.add_session_config_entry("session.intra_op.allow_spinning", "0")
-        self.session = ort.InferenceSession(model_path, sess_options=opts, providers=["CPUExecutionProvider"])
+        self.session = ort.InferenceSession(model_path, sess_options=opts, providers=providers)
+        self.provider = self.session.get_providers()[0]
+        print(f"[yolo] onnxruntime provider in use: {self.provider} (requested {providers[0]}, "
+              f"SIM_YOLO_PROVIDER={os.environ.get('SIM_YOLO_PROVIDER', 'auto')}, intra-op threads {threads})", flush=True)
         names = self.session.get_modelmeta().custom_metadata_map.get("names", "")
         if "'Ball'" not in names.split(",")[0]:
             raise ValueError(f"{model_path}: class 0 is not 'Ball' (names={names})")

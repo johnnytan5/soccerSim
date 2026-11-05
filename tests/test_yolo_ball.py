@@ -58,3 +58,20 @@ def test_real_model_sees_no_ball_in_empty_turf():
     rng = np.random.default_rng(0)
     turf = np.clip(rng.normal([40, 140, 50], 12, (448, 544, 3)), 0, 255).astype(np.uint8)
     assert det.detect(turf, level_camera(), Pose2D(0.0, 0.0, 0.0), 0.105) == []
+
+
+def test_select_providers():
+    import pytest
+
+    from soccer_sim.yolo_ball import select_providers
+
+    cpu, both = ["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    assert select_providers("auto", cpu) == (["CPUExecutionProvider"], 4)
+    assert select_providers("auto", both) == (both, 1)
+    assert select_providers("", both) == (both, 1)
+    assert select_providers("cpu", both) == (["CPUExecutionProvider"], 4)
+    assert select_providers("CUDA", both) == (both, 1)
+    with pytest.raises(RuntimeError):
+        select_providers("cuda", cpu)
+    with pytest.raises(ValueError):
+        select_providers("tpu", cpu)

@@ -28,9 +28,31 @@ pytorch = ">=2.3"
 
 [pypi-dependencies]
 mujoco = ">=3.2.6"
-onnxruntime = "*"
 soccer_sim = { path = ".", editable = true }
 booster_assets = { path = "vendor/booster_assets", editable = true }
+
+# onnxruntime lives in a feature so the `gpu` environment can swap in onnxruntime-gpu (same Python module, so the two
+# cannot coexist). `default` = cpu: unchanged behaviour. Use the GPU one with `pixi run -e gpu ...`.
+[feature.cpu.pypi-dependencies]
+onnxruntime = "*"
+
+[feature.gpu]
+platforms = ["linux-64"]
+
+[feature.gpu.dependencies]
+cuda-version = ">=13,<=13.4"
+cudnn = "9.*"
+libcublas = "*"
+libcufft = "*"
+libcurand = "*"
+cuda-cudart = "*"
+
+[feature.gpu.pypi-dependencies]
+onnxruntime-gpu = "*"
+
+[environments]
+default = ["cpu"]
+gpu = ["gpu"]
 
 [activation]
 scripts = ["scripts/activate.sh"]

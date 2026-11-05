@@ -22,6 +22,7 @@ import argparse
 import csv
 import re
 import json
+import shutil
 import os
 import signal
 import subprocess
@@ -186,8 +187,28 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, w
     return metrics.csv_row(meta, doc)
 
 
+def _gpu_reexec(args, argv) -> None:
+    """--yolo: run the whole batch in the pixi `gpu` environment (onnxruntime-gpu) when it is installed and this
+    interpreter's onnxruntime has no CUDA provider. SIM_YOLO_PROVIDER (auto/cuda/cpu) still decides in the matches."""
+    if not args.yolo or os.environ.get("SIM_YOLO_PROVIDER", "auto") == "cpu" or os.environ.get("SS_GPU_REEXEC"):
+        return
+    try:
+        import onnxruntime
+        if "CUDAExecutionProvider" in onnxruntime.get_available_providers():
+            return
+    except ImportError:
+        pass
+    pixi = shutil.which("pixi")
+    if pixi and (ROOT / ".pixi" / "envs" / "gpu").is_dir():
+        print("[batch] --yolo: switching to the pixi gpu environment (onnxruntime-gpu)", flush=True)
+        os.execvpe(pixi, [pixi, "run", "-e", "gpu", "python", *sys.argv[:1], *(sys.argv[1:] if argv is None else argv)],
+                   {**os.environ, "SS_GPU_REEXEC": "1"})
+    print("[batch] --yolo: no gpu environment (pixi install -e gpu); YOLO runs on the CPU", flush=True)
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
+    _gpu_reexec(args, argv)
     profiles = [p.strip() for p in args.profiles.split(",") if p.strip()]
     bad = [p for p in profiles if not valid_profile(p)]
     if bad:
