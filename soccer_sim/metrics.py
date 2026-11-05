@@ -390,6 +390,8 @@ def _share(modes: dict[str, float]) -> dict[str, float]:
 # ---- one match -> one flat CSV row ----
 CSV_FIELDS = ["profile", "brain", "match", "seed", "roster", "play_s", "wall_s", "goals_home", "goals_away", "goal_diff",
               "blackout_start_play_s", "blackout_end_play_s", "blackout_s"]
+# appended after every other column, so rows added to a CSV written before they existed stay aligned
+H2H_FIELDS = ["home_brain", "away_brain", "home_profile", "away_profile"]
 TEAM_FIELDS = ["role_signal", "role_flips_per_min", "chase_flips_per_min", "lead_changes_per_min",
                "decision_flips_per_min", "duplicate_signal", "duplicate_striker_frac", "duplicate_lead_frac",
                "duplicate_role_frac", "duplicate_decision_frac", "chaser_present_frac",
@@ -406,7 +408,7 @@ def csv_columns(modes: tuple[str, ...] = MODES) -> list[str]:
     for team in ("home", "away"):
         cols += [f"{team}_{f}" for f in TEAM_FIELDS] + [f"{team}_mode_{m}" for m in modes]
         cols += [f"{team}_{pre}_{f}" for _, pre in SEGMENTS for f in SEGMENT_FIELDS]
-    return cols
+    return cols + H2H_FIELDS
 
 
 def csv_row(meta: dict, summary: dict, modes: tuple[str, ...] = MODES) -> dict:
@@ -422,4 +424,5 @@ def csv_row(meta: dict, summary: dict, modes: tuple[str, ...] = MODES) -> dict:
             st = summary.get("segments", {}).get(seg, {}).get("teams", {}).get(team, {})
             for f in SEGMENT_FIELDS:
                 row[f"{team}_{pre}_{f}"] = st.get(f)
+    row.update({k: meta.get(k) for k in H2H_FIELDS})
     return row

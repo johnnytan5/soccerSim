@@ -136,3 +136,45 @@ def test_sweep_parsing_and_cli(tmp_path):
     assert not any(x["value"] == 9 for x in s["sweeps"])           # lat50_loss30 is on neither axis
     assert "good" in s["meta"]["profiles"] and "lat50_loss15" not in s["meta"]["profiles"]
     assert tidy.read_text().splitlines()[0].startswith("kind,profile")
+
+
+def _h2h_csv(path, rows):
+    cols = ["profile", "brain", "goals_home", "goals_away", "home_brain", "away_brain", "home_profile", "away_profile"]
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, cols)
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+
+
+def test_binomial_and_wilcoxon():
+    assert sb.binom_two_sided_p(5, 5) == pytest.approx(0.0625)
+    assert sb.binom_two_sided_p(2, 4) == pytest.approx(1.0)
+    assert sb.binom_two_sided_p(0, 0) is None
+    assert sb.wilcoxon_signed_rank_p([0, 0]) is None
+    assert sb.wilcoxon_signed_rank_p([1, 2, 3, 4, 5, 6, 7, 8]) < 0.02
+    assert sb.wilcoxon_signed_rank_p([1, -1, 2, -2]) == pytest.approx(1.0)
+
+
+def test_h2h_home_perspective_and_swap_pooling(tmp_path):
+    a, b = tmp_path / "a.csv", tmp_path / "b.csv"
+    row = dict(profile="good", brain="current-vs-baseline", home_profile="good", away_profile="good")
+    _h2h_csv(a, [{**row, "goals_home": 3, "goals_away": 1, "home_brain": "current", "away_brain": "baseline"},
+                 {**row, "goals_home": 2, "goals_away": 2, "home_brain": "current", "away_brain": "baseline"}])
+    _h2h_csv(b, [{**row, "goals_home": 0, "goals_away": 1, "home_brain": "baseline", "away_brain": "current"}])
+    (r,) = sb.h2h([a], "home")
+    assert (r["n"], r["wins"], r["draws"], r["losses"]) == (2, 1, 1, 0)
+    assert r["goal_diff_mean"] == pytest.approx(1.0) and r["goals_for_mean"] == pytest.approx(2.5)
+    assert r["p_sign"] == pytest.approx(1.0)
+    (r,) = sb.h2h([a, b], "current")  # the swapped match counts for current: 1-0
+    assert r["n"] == 3 and r["wins"] == 2 and r["goal_diff_mean"] == pytest.approx(1.0)
+    assert "current(good) vs baseline(good)" in sb.fmt_h2h([r])
+
+
+def test_h2h_cli_and_isolated_group(tmp_path, capsys):
+    a = tmp_path / "a.csv"
+    _h2h_csv(a, [dict(profile="good", brain="current", goals_home=g, goals_away=0, home_brain="current", away_brain="current",
+                      home_profile="good", away_profile="blackout") for g in (1, 2, 3)])
+    assert sb.main(["--h2h", str(a), "--out", str(tmp_path / "o.json")]) == 0
+    assert "n=3" in capsys.readouterr().out
+    assert json.loads((tmp_path / "o.json").read_text())["rows"][0]["opp_network"] == "blackout"

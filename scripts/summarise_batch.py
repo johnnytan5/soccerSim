@@ -147,6 +147,89 @@ def mann_whitney_p(a, b):
     return min(1.0, math.erfc(z / math.sqrt(2.0)))
 
 
+def binom_two_sided_p(k, n):
+    """Exact two-sided sign-test p (p0 = 0.5) for k successes in n trials."""
+    if n == 0:
+        return None
+    pmf = [math.comb(n, i) / 2.0 ** n for i in range(n + 1)]
+    return min(1.0, sum(q for q in pmf if q <= pmf[k] * (1 + 1e-9)))
+
+
+def wilcoxon_signed_rank_p(xs):
+    """Two-sided Wilcoxon signed-rank p (zeros dropped), normal approximation with tie and continuity correction."""
+    d = [x for x in xs if x != 0]
+    n = len(d)
+    if n == 0:
+        return None
+    order = sorted(range(n), key=lambda i: abs(d[i]))
+    ranks, tie_term, i = [0.0] * n, 0.0, 0
+    while i < n:
+        j = i
+        while j + 1 < n and abs(d[order[j + 1]]) == abs(d[order[i]]):
+            j += 1
+        for k in range(i, j + 1):
+            ranks[order[k]] = 0.5 * (i + j) + 1.0
+        t = j - i + 1
+        tie_term += t ** 3 - t
+        i = j + 1
+    w = sum(r for r, x in zip(ranks, d) if x > 0)
+    mu = n * (n + 1) / 4.0
+    var = n * (n + 1) * (2 * n + 1) / 24.0 - tie_term / 48.0
+    if var <= 0:
+        return 1.0
+    z = max(abs(w - mu) - 0.5, 0.0) / math.sqrt(var)
+    return min(1.0, math.erfc(z / math.sqrt(2.0)))
+
+
+# ---------------------------------------------------------------- head-to-head
+def h2h(paths, perspective="home"):
+    """Per (profile, brains, team profiles) group: goal difference and goals per match from one side's view.
+    perspective 'home' = the CSV's home team; a brain name ('current'/'baseline') = that brain's team, whichever side it
+    played (so a side-swapped second run pools with the first). n = matches."""
+    groups = defaultdict(list)
+    for path in paths:
+        with open(path, newline="") as f:
+            for row in csv.DictReader(f):
+                gh, ga = num(row.get("goals_home")), num(row.get("goals_away"))
+                hb, ab = (row.get("home_brain") or row.get("brain") or "").strip(), (row.get("away_brain") or row.get("brain") or "").strip()
+                if gh is None or ga is None or not hb or not ab:
+                    continue
+                hp, ap = (row.get("home_profile") or row.get("profile") or "").strip(), (row.get("away_profile") or row.get("profile") or "").strip()
+                if perspective == "home" or hb == perspective:
+                    own, opp, ob, pb, op, pp = gh, ga, hb, ab, hp, ap
+                elif ab == perspective:
+                    own, opp, ob, pb, op, pp = ga, gh, ab, hb, ap, hp
+                else:
+                    continue
+                groups[((row.get("profile") or "").strip(), ob, pb, op, pp)].append((own, opp))
+    out = []
+    for (prof, ob, pb, op, pp), g in groups.items():
+        gd = [a - b for a, b in g]
+        wins, losses = sum(x > 0 for x in gd), sum(x < 0 for x in gd)
+        m, lo, hi = mean_ci(gd)
+        om, olo, ohi = mean_ci([a for a, _ in g])
+        pm, plo, phi = mean_ci([b for _, b in g])
+        out.append({"profile": prof, "own_brain": ob, "opp_brain": pb, "own_network": op, "opp_network": pp,
+                    "n": len(g), "goal_diff_mean": m, "goal_diff_ci_lo": lo, "goal_diff_ci_hi": hi,
+                    "goals_for_mean": om, "goals_for_ci_lo": olo, "goals_for_ci_hi": ohi,
+                    "goals_against_mean": pm, "goals_against_ci_lo": plo, "goals_against_ci_hi": phi,
+                    "wins": wins, "draws": len(gd) - wins - losses, "losses": losses,
+                    "p_sign": binom_two_sided_p(wins, wins + losses), "p_wilcoxon": wilcoxon_signed_rank_p(gd)})
+    return out
+
+
+def fmt_h2h(rows):
+    f = lambda v: "-" if v is None else f"{v:.2f}"  # noqa: E731
+    lines = []
+    for r in rows:
+        lines.append(f"{r['profile']}: {r['own_brain']}({r['own_network']}) vs {r['opp_brain']}({r['opp_network']})  n={r['n']}  "
+                     f"GD {f(r['goal_diff_mean'])} [{f(r['goal_diff_ci_lo'])}, {f(r['goal_diff_ci_hi'])}]  "
+                     f"GF {f(r['goals_for_mean'])} [{f(r['goals_for_ci_lo'])}, {f(r['goals_for_ci_hi'])}]  "
+                     f"GA {f(r['goals_against_mean'])} [{f(r['goals_against_ci_lo'])}, {f(r['goals_against_ci_hi'])}]  "
+                     f"W/D/L {r['wins']}/{r['draws']}/{r['losses']}  p_sign {f(r['p_sign'])}  p_wilcoxon {f(r['p_wilcoxon'])}")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------- loading
 def num(s):
     if s is None:
@@ -298,13 +381,27 @@ def write_csv(path, summary):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--main", nargs="+", required=True, help="main batch CSVs (all brains)")
+    ap.add_argument("--h2h", nargs="+", default=None, metavar="CSV",
+                    help="head-to-head mode: goal difference and goals per match from one side's view, with a sign test and "
+                         "Wilcoxon (replaces --main/--sweep; --out optional JSON)")
+    ap.add_argument("--perspective", default="home", choices=("home", "current", "baseline"),
+                    help="--h2h: whose goals count as 'for' (a brain pools side-swapped runs)")
+    ap.add_argument("--main", nargs="+", default=[], help="main batch CSVs (all brains)")
     ap.add_argument("--sweep", nargs="*", default=[], help="sweep batch CSVs (profiles lat<ms>_loss<pct>)")
-    ap.add_argument("--out", required=True, help="summary JSON")
+    ap.add_argument("--out", default=None, help="summary JSON")
     ap.add_argument("--csv", default=None, help="tidy summary CSV")
     ap.add_argument("--new-hash", default="26b1193")
     ap.add_argument("--pre-hash", default="8d241a2")
     a = ap.parse_args(argv)
+    if a.h2h:
+        rows = h2h(a.h2h, a.perspective)
+        print(fmt_h2h(rows) or "no head-to-head rows")
+        if a.out:
+            with open(a.out, "w") as f:
+                json.dump({"perspective": a.perspective, "rows": rows}, f, indent=1)
+        return 0
+    if not a.main or not a.out:
+        ap.error("--main and --out are required (or use --h2h)")
     s = build(a.main, a.sweep, {"new": a.new_hash, "pre": a.pre_hash})
     with open(a.out, "w") as f:
         json.dump(s, f, indent=1)

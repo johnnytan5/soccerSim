@@ -13,6 +13,10 @@ defaults to 20): the runner polls the flag file the bridge writes at PLAY start,
 to good after T and tells the bridge the wall-clock window (a JSON file) so the metrics split in/outside the blackout.
 Plain `blackout` (no T) never reverts. The other profiles are applied before kick-off as before.
 
+Head-to-head: --home-brain / --away-brain (current|baseline, default --brain) put different brains on the two teams,
+--home-network / --away-network give one team its own profile (e.g. --away-network blackout isolates the away team for
+the whole match). Swap sides by a second run with home and away exchanged. See docs/batch_matches.md.
+
 --brain baseline runs an older brain: build it once into a second workspace (see docs/batch_matches.md):
   ROBOTEDGE_ROOT=<worktree of 8d241a2> SS_WS_DIR=$PWD/ros_ws_baseline PACKAGES=brain pixi run bash scripts/setup_ws.sh
 """
@@ -69,6 +73,10 @@ def parse_args(argv=None):
     p.add_argument("--matches", type=int, default=1, help="matches per profile")
     p.add_argument("--duration", type=float, default=120.0, help="simulated seconds of PLAY to record per match")
     p.add_argument("--brain", choices=("current", "baseline"), default="current")
+    p.add_argument("--home-brain", choices=("current", "baseline"), default=None, help="default: --brain")
+    p.add_argument("--away-brain", choices=("current", "baseline"), default=None, help="default: --brain")
+    p.add_argument("--home-network", default="", help="network profile of the home robots only (default: the scenario profile)")
+    p.add_argument("--away-network", default="", help="network profile of the away robots only; permanent 'blackout' isolates the team")
     p.add_argument("--ws", default="", help="colcon workspace of the brain (default ros_ws; ros_ws_baseline for baseline)")
     p.add_argument("--baseline-root", default=os.environ.get("BASELINE_ROBOTEDGE_ROOT", ""),
                    help="Robotedge checkout of the baseline brain (commit 8d241a2), for config.yaml and behaviour trees")
@@ -89,6 +97,45 @@ def parse_args(argv=None):
     p.add_argument("--timeout-extra", type=float, default=150.0, help="wall seconds allowed beyond duration + ready")
     p.add_argument("--logs", default="", help="directory for per-match logs (default: next to --out)")
     return p.parse_args(argv)
+
+
+def team_brains(args) -> tuple[str, str]:
+    return args.home_brain or args.brain, args.away_brain or args.brain
+
+
+def brain_plan(home: str, away: str, current_root: str, baseline_root: str, ws_current: Path, ws_baseline: Path) -> dict:
+    """How to start the brains of a match. Same brain on both teams: the old way (one workspace overlay, one checkout).
+    Mixed: the sourced ros_ws brain stays the default and the baseline team's brain_node is started by absolute path from
+    the baseline install, with the baseline checkout's config.yaml/trees (match.launch.py home_/away_brain_install|root).
+    "cfg" holds LaunchConfig fields ({team}_brain_root: soccer_launcher.command then emits {team}_brain_root:= and a
+    {team}_brain_install:= pointing at ros_ws_brains/<name>); "installs" is where the baseline build really is
+    (ros_ws_baseline/install), substituted for that argument by command_for()."""
+    if home == away:
+        base = home == "baseline"
+        return {"rcap_root": baseline_root if base else current_root, "ws": ws_baseline if base else ws_current,
+                "cfg": {}, "installs": {}}
+    cfg, installs = {}, {}
+    for team, brain in (("home", home), ("away", away)):
+        if brain == "baseline":
+            cfg[f"{team}_brain_root"] = baseline_root
+            installs[team] = str(ws_baseline / "install")
+    return {"rcap_root": current_root, "ws": ws_current, "cfg": cfg, "installs": installs}
+
+
+def command_for(cfg, rcap_root: str, plan: dict) -> tuple[list[str], dict[str, str]]:
+    """soccer_launcher.command.build_command with the baseline team's brain_install and the workspace overlay
+    (SS_WS_DIR, a colon-separated list for run_match.sh) pointed at the batch runner's own builds."""
+    argv, env = command.build_command(cfg, rcap_root)
+    for team, install in plan["installs"].items():
+        argv = [f"{team}_brain_install:={install}" if a.startswith(f"{team}_brain_install:=") else a for a in argv]
+    env["SS_WS_DIR"] = str(plan["ws"])  # replaces the launcher's ros_ws_brains/<name> overlay, which is not built here
+    return argv, env
+
+
+def team_overrides(profile: str, home_net: str, away_net: str, players: int) -> tuple[str, str, str]:
+    """(network_overrides, home_profile, away_profile) for the scenario `profile` with optional per-team profiles."""
+    over = [f"{team}{i}={net}" for team, net in (("home", home_net), ("away", away_net)) if net for i in range(1, players + 1)]
+    return ",".join(over), home_net or profile, away_net or profile
 
 
 def kill_group(pid: int) -> None:
@@ -146,16 +193,21 @@ def slot_plan(args, k: int) -> tuple[str, int]:
     return str(k), args.domain_base + DOMAIN_SPACING * k
 
 
-def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, ws: Path, k: int = 0) -> dict | None:
+def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: int = 0) -> dict | None:
+    rcap_root, ws = plan["rcap_root"], plan["ws"]
+    home_brain, away_brain = team_brains(args)
     slot, domain_base = slot_plan(args, k)
     ids = tuple(range(1, args.players + 1))
-    tag = f"{profile.replace(':', '')}_{args.brain}_{n}"
+    brain_tag = home_brain if home_brain == away_brain else f"{home_brain}-vs-{away_brain}"
+    tag = f"{profile.replace(':', '')}_{brain_tag}_{n}"
     json_path = out.with_name(f"{out.stem}_{tag}.json")
     flag_path = json_path.with_suffix(".play")
     bo_path = json_path.with_suffix(".blackout")
     blackout = parse_blackout(profile)
     log_path = logs / f"{out.stem}_{tag}.log"
-    meta = {"profile": profile, "brain": args.brain, "match": n, "seed": args.seed + n,
+    overrides, home_profile, away_profile = team_overrides(profile, args.home_network, args.away_network, args.players)
+    meta = {"profile": profile, "brain": brain_tag, "match": n, "home_brain": home_brain, "away_brain": away_brain,
+            "home_profile": home_profile, "away_profile": away_profile, "seed": args.seed + n,
             "roster": f"{args.players}v{args.players}"}
     extra = (f"--web-port -1 --ready-secs {args.ready_secs:g} --seed {meta['seed']} --metrics-out {json_path} "
              f"--metrics-play-secs {args.duration:g} "
@@ -166,9 +218,12 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, w
         extra += f" --record {json_path.with_suffix('.mp4')} --record-window {args.record}"
     if args.trace or args.record:
         extra += f" --trace-out {json_path.with_suffix('.trace.jsonl')}"
-    cfg = _match(_players(ids, ids), continuous=True, network_profile="good" if blackout else profile, viewer=False, simulator="mujoco",
+    cfg = _match(_players(ids, ids), continuous=True, network_profile="good" if blackout else profile,
+                 network_overrides=overrides, viewer=False, simulator="mujoco",
                  ros_domain_id=domain_base, extra_bridge_args=extra)
     cfg.netns_slot = slot
+    for k_, v in plan["cfg"].items():
+        setattr(cfg, k_, v)
     if args.yolo:
         cfg.ball_detector = "yolo"
     errs = cfg.validate()
@@ -184,8 +239,7 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, w
         with netns.session(cfg, log) as run_cfg:
             if netns.active(cfg) and not netns.active(run_cfg):
                 raise SystemExit("network namespaces unavailable here; refusing to run a profile without them")
-            argv, env = command.build_command(run_cfg, rcap_root)
-            env = {**env, "SS_WS_DIR": str(ws)}
+            argv, env = command_for(run_cfg, rcap_root, plan)
             with open(log_path, "w") as lf:
                 proc = subprocess.Popen(argv, cwd=ROOT, env={**os.environ, **env}, start_new_session=True,
                                         stdin=subprocess.DEVNULL, stdout=lf, stderr=subprocess.STDOUT)
@@ -246,26 +300,40 @@ def main(argv=None) -> int:
     bad = [p for p in profiles if not valid_profile(p)]
     if bad:
         raise SystemExit(f"bad profile(s): {', '.join(bad)}")
-    if args.brain == "baseline":
+    home, away = team_brains(args)
+    for net in (args.home_network, args.away_network):
+        if net and not netns.valid_profile(net):
+            raise SystemExit(f"bad team network profile {net!r} (none, good, rcap_bad, terrible, blackout[:T], lat<ms>_loss<pct>)")
+    if (args.home_network or args.away_network) and any(parse_blackout(p) for p in profiles):
+        raise SystemExit("--home-network/--away-network cannot be combined with a blackout:T@O scenario profile")
+    baseline_root = ""
+    if "baseline" in (home, away):
         if not args.baseline_root:
-            raise SystemExit("--brain baseline needs --baseline-root (or $BASELINE_ROBOTEDGE_ROOT)")
-        rcap_root = str(Path(args.baseline_root).resolve())
-    else:
-        rcap_root = os.environ.get("ROBOTEDGE_ROOT", "")
-        if not rcap_root:
-            raise SystemExit("run through pixi (pixi run python scripts/batch_matches.py ...)")
+            raise SystemExit("a baseline brain needs --baseline-root (or $BASELINE_ROBOTEDGE_ROOT)")
+        baseline_root = str(Path(args.baseline_root).resolve())
+    current_root = os.environ.get("ROBOTEDGE_ROOT", "")
+    if "current" in (home, away) and not current_root:
+        raise SystemExit("run through pixi (pixi run python scripts/batch_matches.py ...)")
     if not 1 <= args.parallel <= (MAX_DOMAIN - args.domain_base - 9) // DOMAIN_SPACING + 1:
         raise SystemExit(f"--parallel {args.parallel}: ROS domains {args.domain_base} + 20*k + 9 must stay <= {MAX_DOMAIN}")
-    ws = Path(args.ws or ("ros_ws_baseline" if args.brain == "baseline" else "ros_ws"))
-    ws = (ROOT / ws).resolve() if not ws.is_absolute() else ws
-    if not (ws / "install" / "setup.bash").exists():
-        raise SystemExit(f"{ws} has no install/: build it first (see --help)")
+
+    def abs_ws(w):
+        w = Path(w)
+        return w if w.is_absolute() else (ROOT / w).resolve()
+
+    uses_baseline = "baseline" in (home, away)
+    ws_baseline = abs_ws(args.ws or "ros_ws_baseline") if uses_baseline else None
+    ws_current = abs_ws(args.ws if args.ws and not uses_baseline else "ros_ws")  # --ws names the baseline build when there is one
+    plan = brain_plan(home, away, current_root, baseline_root, ws_current, ws_baseline)
+    for w in {plan["ws"], ws_baseline} - {None}:
+        if not (w / "install" / "setup.bash").exists():
+            raise SystemExit(f"{w} has no install/: build it first (see --help)")
     out = Path(args.out)
     out = out if out.is_absolute() else ROOT / out
     out.parent.mkdir(parents=True, exist_ok=True)
     logs = Path(args.logs) if args.logs else out.parent
     logs.mkdir(parents=True, exist_ok=True)
-    if any(p != "none" for p in profiles):
+    if any(p != "none" for p in profiles) or args.home_network or args.away_network:
         lacks = netns.missing()
         if lacks:
             raise SystemExit("cannot use network profiles here: " + "; ".join(lacks))
@@ -276,9 +344,9 @@ def main(argv=None) -> int:
 
     def work(job, k):
         profile, n = job
-        print(f"[batch] {args.brain} {profile} match {n + 1}/{args.matches} ({args.players}v{args.players}, "
+        print(f"[batch] {'/'.join(team_brains(args))} {profile} match {n + 1}/{args.matches} ({args.players}v{args.players}, "
               f"{args.duration:g} s of play" + (f", slot {k}" if args.parallel > 1 else "") + ")", flush=True)
-        row = run_one(args, profile, n, out, logs, rcap_root, ws, k)
+        row = run_one(args, profile, n, out, logs, plan, k)
         if row is None:
             return
         with write_lock:

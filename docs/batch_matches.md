@@ -70,6 +70,45 @@ Measured, two 30 s 5v5 `good` matches at once (16 cores): mean `tick_hz` over PL
 Both are below 45, so the brains see a slowed-down world: **default K=1**. `tick_hz_mean` (and `tick_hz_last`) are in each match JSON
 and printed by the runner.
 
+## Head-to-head matches (`--home-brain`, `--away-brain`, `--home-network`, `--away-network`)
+
+Both teams normally run the same brain, so the goal difference is 0 by symmetry. Head-to-head puts different brains and/or
+different network conditions on the two teams:
+
+```
+pixi run python scripts/batch_matches.py --profiles good,rcap_bad --matches 10 --duration 120 \
+    --home-brain current --away-brain baseline --baseline-root <worktree of 8d241a2> --out results/h2h1_a.csv
+```
+
+- `--home-brain` / `--away-brain` (`current`|`baseline`) default to `--brain`. Same brain on both teams: unchanged behaviour
+  (`--brain baseline` overlays `ros_ws_baseline` for everyone). Mixed: `ros_ws` stays the sourced workspace and the baseline
+  team's robots are started with `home_|away_brain_install:=<ros_ws_baseline>/install` and `home_|away_brain_root:=<baseline
+  checkout>` (match.launch.py; the launcher's per-team brain arguments, with the install dir pointed at the baseline build and
+  `SS_WS_DIR` set to the runner's workspace for run_match.sh's overlay): that team's `brain_node` is run by absolute path from the baseline install, with the baseline
+  checkout's `config.yaml`, behaviour trees and vision config. `--ws` names the baseline workspace then. Teams use different
+  UDP ports (10000 + team), so protocol v7 vs v8 does not matter. Both teams get the same `brain_params`/settings.
+- `--home-network P` / `--away-network P` give one team's five robots profile P (per-robot overrides, `home1..5=P`); the
+  scenario profile from `--profiles` applies to the other team. A permanent `blackout` (no `:T`) isolates the team for the
+  whole match. Not combinable with a `blackout:T@O` scenario profile (that one is applied to all robots by the runner).
+- Output names carry `<home>-vs-<away>` instead of the brain. The CSV/JSON get `home_brain`, `away_brain`, `home_profile`,
+  `away_profile` (last four CSV columns, so older CSVs stay aligned); the `brain` column is `current-vs-baseline` etc., so
+  `summarise_batch.py --main` ignores mixed rows.
+- Swapping sides: run a second set with home and away exchanged (and the same seeds), writing to another CSV.
+
+Summary: `pixi run python scripts/summarise_batch.py --h2h results/h2h1_a.csv results/h2h1_b.csv --perspective current
+[--out h2h.json]`. `--perspective home` (default) reports the CSV's home team; `current`/`baseline` follow that brain across
+both runs so swapped sets pool. Per group (scenario profile, brains, team networks): n = matches, goal difference and goals
+for/against per match (mean, Student-t 95% CI), W/D/L, exact two-sided binomial sign test on wins vs losses (draws dropped)
+and a Wilcoxon signed-rank p on the goal differences (normal approximation).
+
+**H2H-1: new vs pre-change, good and rcap_bad.** Set A: `--home-brain current --away-brain baseline --profiles good,rcap_bad`.
+Set B: the same with `--home-brain baseline --away-brain current` (other `--out`). Summarise both with
+`--h2h A.csv B.csv --perspective current`.
+
+**H2H-2: new isolated vs new healthy.** `--brain current --profiles good --away-network blackout --out results/h2h2_a.csv`
+(away isolated), then `--home-network blackout` (home isolated) for the swapped set; summarise with `--perspective home` on
+the second set, or read the first set's goal difference negated (the isolated team is `away`).
+
 ## Baseline brain (Robotedge 8d241a2, protocol v7)
 
 ```
