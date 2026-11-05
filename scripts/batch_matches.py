@@ -154,8 +154,13 @@ def kill_group(pid: int) -> None:
 
 
 def _drive_blackout(spec, window, flag_path: Path, bo_path: Path, cfg, log):
-    """One poll step of the PLAY-keyed blackout. The window is only written (and the netem profile only changed)
-    after the PLAY flag file exists; start/end are the wall clock at which the profile was actually in force."""
+    """One poll step of the PLAY-keyed blackout. The window file is what the bridge classifies samples with
+    (soccer_sim.metrics.window_state), all in monotonic seconds:
+      start         taken BEFORE `netem.sh apply blackout` begins
+      apply_s       how long that apply took; [start, start+apply_s] is a ramp (counted in neither segment)
+      revert_begin  taken BEFORE the revert begins; the dark period is [start+apply_s, revert_begin)
+      end, revert_s taken AFTER the revert returned; [revert_begin, end] is a ramp too
+    The blackout lasts `duration` seconds from the moment the apply finished."""
     duration, offset = spec
     if window is not None and window.get("end") is not None:
         return window
@@ -167,21 +172,66 @@ def _drive_blackout(spec, window, flag_path: Path, bo_path: Path, cfg, log):
     if window is None:
         if now < flag["wall"] + offset:
             return None
+        window = {"start": now, "apply_s": None, "revert_begin": None, "end": None, "revert_s": None,
+                  "play_wall": flag["wall"]}
+        _write_json(bo_path, window)  # start is on disk before the first tc command runs
         if not netns._netem(["apply", "blackout"], cfg, log):
             raise SystemExit("could not apply the blackout")
-        window = {"start": time.monotonic(), "end": None, "play_wall": flag["wall"]}
+        window["apply_s"] = time.monotonic() - window["start"]
         _write_json(bo_path, window)
-        log(f"blackout started {window['start'] - flag['wall']:.1f} s after PLAY")
+        log(f"blackout started {window['start'] - flag['wall']:.1f} s after PLAY (apply took {window['apply_s']:.2f} s)")
         return window
-    if duration is not None and now >= window["start"] + duration:
-        window["end"] = time.monotonic()  # recorded before the revert command: those samples are certainly blacked out
+    if duration is not None and window["revert_begin"] is None and now >= window["start"] + window["apply_s"] + duration:
+        window["revert_begin"] = time.monotonic()
         _write_json(bo_path, window)
-        if not netns._netem(["apply", "good"], cfg, log):
+        ok = netns._netem(["apply", "good"], cfg, log)
+        window["end"] = time.monotonic()  # after the revert returned: every sample before this may still be impaired
+        window["revert_s"] = window["end"] - window["revert_begin"]
+        _write_json(bo_path, window)
+        if not ok:
             raise SystemExit("could not revert the blackout")
-        log(f"blackout ended {window['end'] - window['start']:.1f} s after it started")
+        log(f"blackout dark for {window['revert_begin'] - window['start'] - window['apply_s']:.1f} s, revert took {window['revert_s']:.2f} s")
     return window
 
 
+def validate_parallel(parallel: int, profiles: list[str], home_net: str, away_net: str) -> None:
+    """--parallel K>1 runs each match in its own netem slot, so every robot must be namespaced: a `none` profile runs on the
+    host network, where parallel matches would hear each other's team broadcasts."""
+    if parallel <= 1:
+        return
+    bad = [p for p in profiles if "none" in (home_net or p, away_net or p)]
+    if bad:
+        raise SystemExit("--parallel > 1 needs every robot in a network namespace: profile 'none' (host network) would let "
+                         "concurrent matches hear each other; use 'good' instead, or --parallel 1")
+
+
+def match_tag(profile: str, brain_tag: str, n: int, home_net: str = "", away_net: str = "") -> str:
+    """Per-match output tag; per-team networks are part of it so different --home/--away-network runs never overwrite each other."""
+    nets = "".join(f"_{team}-{net.replace(':', '')}" for team, net in (("home", home_net), ("away", away_net)) if net)
+    return f"{profile.replace(':', '')}_{brain_tag}{nets}_{n}"
+
+
+STOP = threading.Event()  # set by the SIGINT/SIGTERM handler: no new matches, running ones end
+_LOCK = threading.Lock()
+RUNNING: list = []  # match processes (subprocess.Popen) currently running
+ACTIVE: list = []  # LaunchConfigs whose netns session is up
+
+
+def shutdown(signum=None, frame=None) -> None:
+    """SIGINT/SIGTERM: kill every running match's process group, then remove the namespaces of the slots in use."""
+    STOP.set()
+    with _LOCK:
+        procs, cfgs = list(RUNNING), list(ACTIVE)
+    for proc in procs:
+        kill_group(proc.pid)
+    for cfg in cfgs:
+        if netns.active(cfg):
+            netns.tear_down(cfg)
+    if signum is not None:
+        raise SystemExit(128 + signum)
+
+
+RECORD_ALLOWANCE_S = 600.0  # extra wall seconds for the clip render when --record is set
 DOMAIN_SPACING = 20  # a match uses up to 10 consecutive ROS domains
 MAX_DOMAIN = 232
 
@@ -199,7 +249,7 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: in
     slot, domain_base = slot_plan(args, k)
     ids = tuple(range(1, args.players + 1))
     brain_tag = home_brain if home_brain == away_brain else f"{home_brain}-vs-{away_brain}"
-    tag = f"{profile.replace(':', '')}_{brain_tag}_{n}"
+    tag = match_tag(profile, brain_tag, n, args.home_network, args.away_network)
     json_path = out.with_name(f"{out.stem}_{tag}.json")
     flag_path = json_path.with_suffix(".play")
     bo_path = json_path.with_suffix(".blackout")
@@ -214,7 +264,8 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: in
              f"--play-flag {flag_path} --blackout-file {bo_path}")
     if slot:  # count only this slot's team broadcasts (the other slots' bridges listen on their own subnets)
         extra += f" --packet-bind {netns.slot_names(slot)['broadcast']}"
-    if args.record and (args.record_matches == "all" or n in {int(x) for x in args.record_matches.split(",")}):
+    recording = bool(args.record and (args.record_matches == "all" or n in {int(x) for x in args.record_matches.split(",")}))
+    if recording:
         extra += f" --record {json_path.with_suffix('.mp4')} --record-window {args.record}"
     if args.trace or args.record:
         extra += f" --trace-out {json_path.with_suffix('.trace.jsonl')}"
@@ -235,24 +286,41 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: in
     proc, timed_out = None, False
     window: dict | None = None  # {"start": wall, "end": wall | None}, mirrored to the bridge (--blackout-file)
     log = lambda text: print(f"  {text}", flush=True)  # noqa: E731
+    with _LOCK:
+        ACTIVE.append(cfg)  # the signal handler tears these sessions down
     try:
         with netns.session(cfg, log) as run_cfg:
             if netns.active(cfg) and not netns.active(run_cfg):
                 raise SystemExit("network namespaces unavailable here; refusing to run a profile without them")
             argv, env = command_for(run_cfg, rcap_root, plan)
-            with open(log_path, "w") as lf:
-                proc = subprocess.Popen(argv, cwd=ROOT, env={**os.environ, **env}, start_new_session=True,
-                                        stdin=subprocess.DEVNULL, stdout=lf, stderr=subprocess.STDOUT)
-                limit = args.duration + args.ready_secs + args.timeout_extra
-                while proc.poll() is None and time.monotonic() - t0 < limit and not json_path.exists():
-                    if blackout is not None:
-                        window = _drive_blackout(blackout, window, flag_path, bo_path, run_cfg, log)
-                    time.sleep(0.2)
-                time.sleep(1.0 if json_path.exists() else 0.0)
-                timed_out = proc.poll() is None and not json_path.exists()
+            try:
+                with open(log_path, "w") as lf:
+                    proc = subprocess.Popen(argv, cwd=ROOT, env={**os.environ, **env}, start_new_session=True,
+                                            stdin=subprocess.DEVNULL, stdout=lf, stderr=subprocess.STDOUT)
+                    with _LOCK:
+                        RUNNING.append(proc)
+                    limit = args.duration + args.ready_secs + args.timeout_extra + (RECORD_ALLOWANCE_S if recording else 0.0)
+                    while proc.poll() is None and time.monotonic() - t0 < limit and not json_path.exists() and not STOP.is_set():
+                        if blackout is not None:
+                            window = _drive_blackout(blackout, window, flag_path, bo_path, run_cfg, log)
+                        time.sleep(0.2)
+                    if json_path.exists() and recording:  # the metrics are on disk; let the clip render finish (bounded)
+                        wait_end = time.monotonic() + RECORD_ALLOWANCE_S
+                        while proc.poll() is None and time.monotonic() < wait_end and not STOP.is_set():
+                            time.sleep(0.5)
+                    time.sleep(1.0 if json_path.exists() else 0.0)
+                    timed_out = proc.poll() is None and not json_path.exists()
+            finally:
+                # the match process group dies BEFORE the namespaces are torn down (leaving the `with` below)
+                if proc is not None:
+                    kill_group(proc.pid)
+                    with _LOCK:
+                        if proc in RUNNING:
+                            RUNNING.remove(proc)
     finally:
-        if proc is not None:
-            kill_group(proc.pid)
+        with _LOCK:
+            if cfg in ACTIVE:
+                ACTIVE.remove(cfg)
     wall = time.monotonic() - t0
     if blackout is not None:
         meta["blackout_wall"] = window
@@ -263,6 +331,9 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: in
     doc = json.loads(json_path.read_text())
     meta.update(play_s=doc["play_s"], wall_s=round(wall, 1), goals_home=doc["score"]["home"],
                 goals_away=doc["score"]["away"], goal_diff=doc["score"]["home"] - doc["score"]["away"])
+    if window:
+        meta.update(blackout_apply_s=round(window["apply_s"], 3) if window.get("apply_s") is not None else None,
+                    blackout_revert_s=round(window["revert_s"], 3) if window.get("revert_s") is not None else None)
     bw = doc.get("blackout_window") or {}
     meta.update(blackout_start_play_s=bw.get("start_play_s"), blackout_end_play_s=bw.get("end_play_s"),
                 blackout_s=bw.get("duration_s"))
@@ -270,6 +341,18 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: in
     doc["meta"] = {**doc.get("meta", {}), **meta}
     json_path.write_text(json.dumps(doc, indent=1))
     return metrics.csv_row(meta, doc)
+
+
+def check_csv_header(out: Path, columns: list[str]) -> None:
+    """Appending rows to a CSV whose header lacks columns would misalign them: refuse with a clear error."""
+    if not out.exists() or out.stat().st_size == 0:
+        return
+    with open(out, newline="") as f:
+        header = next(csv.reader(f), [])
+    if header != columns:
+        missing = [c for c in columns if c not in header]
+        raise SystemExit(f"{out} has a different header than this version writes (missing: {', '.join(missing) or 'none, order differs'}); "
+                         "write to a new --out file or migrate the CSV (rewrite it with the new header) first")
 
 
 def _gpu_reexec(args, argv) -> None:
@@ -314,6 +397,7 @@ def main(argv=None) -> int:
     current_root = os.environ.get("ROBOTEDGE_ROOT", "")
     if "current" in (home, away) and not current_root:
         raise SystemExit("run through pixi (pixi run python scripts/batch_matches.py ...)")
+    validate_parallel(args.parallel, profiles, args.home_network, args.away_network)
     if not 1 <= args.parallel <= (MAX_DOMAIN - args.domain_base - 9) // DOMAIN_SPACING + 1:
         raise SystemExit(f"--parallel {args.parallel}: ROS domains {args.domain_base} + 20*k + 9 must stay <= {MAX_DOMAIN}")
 
@@ -338,12 +422,17 @@ def main(argv=None) -> int:
         if lacks:
             raise SystemExit("cannot use network profiles here: " + "; ".join(lacks))
     columns = metrics.csv_columns()
+    check_csv_header(out, columns)
     state = {"new": not out.exists(), "done": 0}
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
     write_lock = threading.Lock()
     jobs = [(profile, n) for profile in profiles for n in range(args.matches)]
 
     def work(job, k):
         profile, n = job
+        if STOP.is_set():
+            return
         print(f"[batch] {'/'.join(team_brains(args))} {profile} match {n + 1}/{args.matches} ({args.players}v{args.players}, "
               f"{args.duration:g} s of play" + (f", slot {k}" if args.parallel > 1 else "") + ")", flush=True)
         row = run_one(args, profile, n, out, logs, plan, k)

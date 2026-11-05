@@ -289,3 +289,36 @@ def test_batch_blackout_profile_parsing():
     assert bm.parse_blackout("blackout") == (None, bm.DEFAULT_BLACKOUT_OFFSET_S)
     assert bm.parse_blackout("blackout:5@2.5") == (5.0, 2.5)
     assert bm.parse_blackout("good") is None and bm.valid_profile("good") and not bm.valid_profile("blackout:@3")
+
+
+def test_window_state_ramps_are_neither_dark_nor_outside():
+    from soccer_sim.metrics import window_state
+    w = {"start": 20.0, "apply_s": 2.0, "revert_begin": 40.0, "end": 41.5, "revert_s": 1.5}
+    states = {t: window_state(t, w) for t in (10, 20, 21.9, 22, 39.9, 40, 41.4, 41.5, 60)}
+    assert states == {10: "outside", 20: "ramp", 21.9: "ramp", 22: "dark", 39.9: "dark", 40: "ramp", 41.4: "ramp",
+                      41.5: "outside", 60: "outside"}
+    assert window_state(5, None) == "outside"
+    # apply still running (apply_s unknown): ramp; apply done, no revert yet (permanent blackout): dark for good
+    assert window_state(25, {"start": 20.0, "apply_s": None}) == "ramp"
+    assert window_state(1e6, {"start": 20.0, "apply_s": 2.0, "revert_begin": None, "end": None}) == "dark"
+    # revert started but not finished: ramp until end; end - revert_s stands in for revert_begin
+    assert window_state(40.5, {"start": 20.0, "apply_s": 2.0, "revert_begin": 40.0, "end": None}) == "ramp"
+    assert window_state(38.9, {"start": 20.0, "apply_s": 2.0, "end": 41.0, "revert_s": 2.0}) == "dark"
+    assert window_state(39.0, {"start": 20.0, "apply_s": 2.0, "end": 41.0, "revert_s": 2.0}) == "ramp"
+
+
+def test_ramp_samples_count_in_neither_segment():
+    from soccer_sim.metrics import window_state
+    w = {"start": 20.0, "apply_s": 2.0, "revert_begin": 35.0, "end": 37.0, "revert_s": 2.0}
+    rec = MetricsRecorder()
+    t = 0.0
+    for _ in range(600):
+        ball, robots = (0.0, 0.0), [robot("H2", "chase")]
+        st = window_state(t, w)
+        rec.add(Sample(t, True, ball, robots, blackout=st == "dark", ramp=st == "ramp"))
+        t += DT
+    s = rec.summary()
+    inside, outside = s["segments"]["blackout"], s["segments"]["outside"]
+    assert abs(inside["play_s"] - 13.0) < 0.3                      # 22..35
+    assert abs(outside["play_s"] - (60.0 - 17.0)) < 0.5            # 0..20 and 37..60; both ramps (2 s each) excluded
+    assert abs(s["blackout_window"]["start_play_s"] - 22.0) < 0.3 and abs(s["blackout_window"]["end_play_s"] - 35.0) < 0.3

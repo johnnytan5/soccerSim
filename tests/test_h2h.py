@@ -76,6 +76,40 @@ def test_args_default_to_brain():
 def test_csv_has_h2h_columns_last():
     from soccer_sim import metrics
     cols = metrics.csv_columns()
-    assert cols[-4:] == ["home_brain", "away_brain", "home_profile", "away_profile"]
+    assert cols[-6:] == ["home_brain", "away_brain", "home_profile", "away_profile", "blackout_apply_s", "blackout_revert_s"]
     row = metrics.csv_row({"home_brain": "current", "away_brain": "baseline", "home_profile": "good", "away_profile": "blackout"}, {})
     assert row["away_profile"] == "blackout"
+
+
+def test_parallel_needs_namespaced_robots():
+    import pytest
+    bm.validate_parallel(1, ["none"], "", "")                       # a single match may run on the host network
+    bm.validate_parallel(3, ["good", "rcap_bad", "blackout:10"], "", "")
+    with pytest.raises(SystemExit, match="namespace"):
+        bm.validate_parallel(2, ["good", "none"], "", "")
+    with pytest.raises(SystemExit, match="namespace"):
+        bm.validate_parallel(2, ["good"], "none", "")
+    with pytest.raises(SystemExit, match="namespace"):
+        bm.validate_parallel(2, ["none"], "good", "")               # the away team would still be on the host
+    bm.validate_parallel(2, ["none"], "good", "good")
+
+
+def test_match_tag_includes_team_networks():
+    assert bm.match_tag("good", "current", 2) == "good_current_2"
+    assert bm.match_tag("blackout:10@20", "current", 0) == "blackout10@20_current_0"
+    assert bm.match_tag("good", "current", 1, away_net="blackout") == "good_current_away-blackout_1"
+    assert bm.match_tag("good", "a-vs-b", 1, "terrible", "blackout:5") == "good_a-vs-b_home-terrible_away-blackout5_1"
+    assert bm.match_tag("good", "current", 1, home_net="blackout") != bm.match_tag("good", "current", 1, away_net="blackout")
+
+
+def test_csv_header_check(tmp_path):
+    import pytest
+    cols = ["a", "b", "c"]
+    bm.check_csv_header(tmp_path / "missing.csv", cols)
+    ok = tmp_path / "ok.csv"
+    ok.write_text("a,b,c\n1,2,3\n")
+    bm.check_csv_header(ok, cols)
+    old = tmp_path / "old.csv"
+    old.write_text("a,b\n1,2\n")
+    with pytest.raises(SystemExit, match="missing: c"):
+        bm.check_csv_header(old, cols)

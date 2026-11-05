@@ -31,7 +31,7 @@ from soccer_sim.frames import TeamFrame
 from soccer_sim.game_controller import AWAY, HOME, SET_PLAYS, GameController, Goal, MatchCfg, PlaceBall, SwapSides
 from soccer_sim.joystick import FirmwareRemote, manual_velocity
 from soccer_sim.kick_model import KickRef
-from soccer_sim.metrics import MetricsRecorder, RobotSample, Sample
+from soccer_sim.metrics import MetricsRecorder, RobotSample, Sample, window_state
 from soccer_sim.loco_rpc import MODE_DAMPING, MODE_PREPARE, MODE_SOCCER, LocoState
 from soccer_sim.packet_budget import PacketBudget
 from soccer_sim.placement import robot_pose_from_dict
@@ -219,7 +219,7 @@ class MatchBridge:
         self.metrics_meta: dict = {}
         self.play_flag = ""  # --play-flag: written once, when the first PLAY sample is recorded (the batch runner polls it)
         self.blackout_file = ""  # --blackout-file: {"start": wall, "end": wall|null} written by the batch runner
-        self._blackout: tuple[float, float | None] | None = None
+        self._blackout: dict | None = None
         self._blackout_read = 0.0
         self._play_wall0: tuple[float, int] | None = None  # (monotonic, tick_count) at the first PLAY sample: mean tick rate
         self.clip = None  # soccer_sim_bridge.clip_recorder.ClipRecorder (--record), set by _run_mujoco
@@ -543,12 +543,14 @@ class MatchBridge:
             self._play_wall0 = (time.monotonic(), self.tick_count)
         if playing and self.play_flag and not os.path.exists(self.play_flag):
             self._write_json_atomic(self.play_flag, {"wall": time.monotonic(), "sim_t": self.tick_count * self.world.policy_dt})
+        state = window_state(time.monotonic(), self._blackout_window()) if playing else "outside"
         self.recorder.add(Sample(self.tick_count * self.world.policy_dt, playing, (st["ball"]["x"], st["ball"]["y"]), robots,
-                                 blackout=playing and self._in_blackout()))
+                                 blackout=state == "dark", ramp=state == "ramp"))
         clip = self.clip is not None and playing and self.clip.in_window(self.recorder.play_s)
         trace = self._trace_file is not None and playing and self.recorder.play_s >= self._trace_next
         if trace or clip:
-            row = self._trace_row(st, views, robots, blackout=playing and self._in_blackout())
+            row = self._trace_row(st, views, robots, blackout=state == "dark")
+            row["ramp"] = state == "ramp"
         if trace:
             self._trace_next = max(self._trace_next + TRACE_PERIOD_S, self.recorder.play_s - TRACE_PERIOD_S / 2)  # fixed 10 Hz grid
             self._trace_file.write(json.dumps(row, separators=(",", ":")) + "\n")
@@ -598,23 +600,20 @@ class MatchBridge:
             json.dump(doc, f)
         os.replace(tmp, path)
 
-    def _in_blackout(self) -> bool:
-        """Wall-clock window the batch runner wrote to --blackout-file (it applies the netem blackout itself)."""
+    def _blackout_window(self) -> dict | None:
+        """Wall-clock window the batch runner wrote to --blackout-file (it applies the netem blackout itself); classified
+        by soccer_sim.metrics.window_state, so the apply / revert ramps are in neither segment."""
         if not self.blackout_file:
-            return False
+            return None
         now = time.monotonic()
         if now - self._blackout_read > 0.2:  # re-read a few times a second, not every sample
             self._blackout_read = now
             try:
                 with open(self.blackout_file) as f:
-                    d = json.load(f)
-                self._blackout = (float(d["start"]), None if d.get("end") is None else float(d["end"]))
-            except (OSError, ValueError, KeyError, TypeError):
+                    self._blackout = json.load(f)
+            except (OSError, ValueError, TypeError):
                 pass  # absent or mid-write: keep the last known window
-        if self._blackout is None:
-            return False
-        start, end = self._blackout
-        return now >= start and (end is None or now < end)
+        return self._blackout
 
     def _tick_hz_mean(self) -> float | None:
         """Mean sim tick rate over the PLAY phase (wall clock), not just the last second."""
@@ -624,20 +623,24 @@ class MatchBridge:
         return round((self.tick_count - n0) / max(time.monotonic() - t0, 1e-6), 1)
 
     def _write_metrics(self) -> None:
+        """Result first, clip second: the metrics JSON is on disk (and the trace flushed) before the possibly slow clip
+        render is closed, so a stuck render can never lose the match. The clip stats are added by a second atomic write."""
         tick_hz_mean = self._tick_hz_mean()  # before the clip render, which runs with the sim loop stalled
-        if self.clip is not None and not self.clip_closed:
-            self._close_clip()
         score = dict(self.gc.score)
         doc = {"meta": self.metrics_meta, "score": {"home": score.get(HOME, 0), "away": score.get(AWAY, 0)},
                "tick_hz_last": round(self.tick_hz, 1),
                "tick_hz_mean": tick_hz_mean, "record": self.clip_stats, **self.recorder.summary()}
-        with open(self.metrics_out, "w") as f:
-            json.dump(doc, f, indent=1)
+        self._write_json_atomic(self.metrics_out, doc)
         self._log(f"metrics written to {self.metrics_out}")
         self.finished = True
         if self._trace_file is not None:
+            self._trace_file.flush()
             self._trace_file.close()
             self._trace_file = None
+        if self.clip is not None and not self.clip_closed:
+            self._close_clip()
+            doc["record"] = self.clip_stats
+            self._write_json_atomic(self.metrics_out, doc)
 
     def _packet_status(self) -> dict:
         counting = self.packet_counter.active

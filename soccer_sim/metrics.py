@@ -65,7 +65,27 @@ class Sample:
     playing: bool
     ball: tuple[float, float]
     robots: list[RobotSample] = field(default_factory=list)
-    blackout: bool = False  # inside the batch runner's blackout window
+    blackout: bool = False  # fully dark: inside the batch runner's blackout window, ramps excluded
+    ramp: bool = False  # while the runner is applying / reverting the blackout: counted in neither segment
+
+
+def window_state(now: float, window: dict | None) -> str:
+    """Classify wall-clock `now` against the runner's blackout window: "outside", "ramp" or "dark".
+    window keys (monotonic seconds): start (taken BEFORE the apply began), apply_s (apply duration; None while the apply
+    is still running), revert_begin (taken BEFORE the revert began; None until then), end (after the revert finished),
+    revert_s. Only [start + apply_s, revert_begin) is dark; [start, start + apply_s) and [revert_begin, end) are ramps."""
+    if not window or window.get("start") is None or now < window["start"]:
+        return "outside"
+    if window.get("apply_s") is None or now < window["start"] + window["apply_s"]:
+        return "ramp"
+    rb, end = window.get("revert_begin"), window.get("end")
+    if rb is None and end is not None and window.get("revert_s") is not None:
+        rb = end - window["revert_s"]
+    if rb is None or now < rb:
+        return "dark"
+    if end is None or now < end:
+        return "ramp"
+    return "outside"
 
 
 def chasing(decision: str) -> bool:
@@ -153,7 +173,7 @@ class MetricsRecorder:
                     self.bo_window = [self.play_s, self.play_s]
                 self.bo_window[1] = self.play_s + (s.t - self._prev.t if self._prev is not None and 0 < s.t - self._prev.t <= MAX_DT_S else 0.0)
             for name, part in self._parts.items():
-                part.add(replace(s, playing=s.playing and s.blackout == (name == "blackout")))
+                part.add(replace(s, playing=s.playing and not s.ramp and s.blackout == (name == "blackout")))
         self._add(s)
 
     def _add(self, s: Sample) -> None:
@@ -391,7 +411,7 @@ def _share(modes: dict[str, float]) -> dict[str, float]:
 CSV_FIELDS = ["profile", "brain", "match", "seed", "roster", "play_s", "wall_s", "goals_home", "goals_away", "goal_diff",
               "blackout_start_play_s", "blackout_end_play_s", "blackout_s"]
 # appended after every other column, so rows added to a CSV written before they existed stay aligned
-H2H_FIELDS = ["home_brain", "away_brain", "home_profile", "away_profile"]
+H2H_FIELDS = ["home_brain", "away_brain", "home_profile", "away_profile", "blackout_apply_s", "blackout_revert_s"]
 TEAM_FIELDS = ["role_signal", "role_flips_per_min", "chase_flips_per_min", "lead_changes_per_min",
                "decision_flips_per_min", "duplicate_signal", "duplicate_striker_frac", "duplicate_lead_frac",
                "duplicate_role_frac", "duplicate_decision_frac", "chaser_present_frac",
