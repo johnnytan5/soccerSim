@@ -48,9 +48,60 @@ in the root namespace (default RMW, discovery works over br-sim with the multica
 | rcap_bad | `delay 150ms 120ms distribution normal loss gemodel 5% 20% 75% 0.1%` | ~150 ms +-120 ms, bursty loss ~15% |
 | terrible | `delay 600ms 200ms loss 40%` | 600 +-200 ms, 40% |
 | blackout[:T] | `loss 100%` (both directions) | total loss; after T seconds returns to the profile it replaced |
+| `lat<ms>_loss<pct>` | custom, see below | `ms` delay, jitter 0.4 ms (normal), bursty loss with mean `pct` % |
 
 Gilbert-Elliott: P(good->bad)=5%, P(bad->good)=20% (mean burst ~5 packets), 75% loss in the bad state, 0.1% in good;
 stationary loss 0.2*0.75+0.8*0.001 = 15.1%. Optionally add `rate 2mbit` to the rcap_bad line in `profile_args`.
+
+### Custom profiles `lat<ms>_loss<pct>`
+
+`scripts/netem.sh apply lat100_loss5` (also `lat150_loss2.5`; usable in the launcher's network profile and in
+`batch_matches --profiles`). Delay = `ms` with jitter `0.4*ms` and `distribution normal`. Loss is Gilbert-Elliott with the
+parameters derived from the target mean loss L (`custom_args` in netem.sh):
+
+- loss in the good state 0, in the bad state `lb` = 75% (100% when pct > 60);
+- mean bad burst 1/r with r = 30% (3.3 packets);
+- stationary bad fraction `pi = L / lb`, so `p = r * pi / (1 - pi)`; mean loss = `pi * lb` = L exactly. (With lb = 100% this is the
+  formula `p = L r / (1 - L)`; with 75% in the bad state `pi` must be L/0.75, so that formula would undershoot.)
+- if p would exceed 1 (L above ~ 70%), p = 1 and r shrinks instead.
+
+Examples: `lat100_loss5` = `delay 100ms 40ms distribution normal loss gemodel 2.1429% 30% 75% 0%`; `lat150_loss15` =
+`... loss gemodel 7.5% 30% 75% 0%`. `lat0_loss0` = no impairment (`netem limit 1000`, a pure pass-through); `lat<ms>_loss0` only
+delays, `lat0_loss<pct>` only loses. Like the others, only the team ports are impaired.
+
+Measured with `scripts/netem_probe.py` (the method below: 64 B probes at 200 pkt/s, ss-r1 broadcasts to ss-r2, 6000 probes per
+row, applied on robot 1's uplink; run in slot 7). Delay uses CLOCK_MONOTONIC: this WSL's wall clock steps by seconds during a
+run, which made an early attempt with `time.time()` show 23 s outliers.
+
+| Profile | Loss nominal / measured | Mean loss burst | Delay nominal (mean, sd) | Measured mean / sd / p99 / max |
+|---|---|---|---|---|
+| lat0_loss0 (1000 pkts) | 0 / 0.0% | - | none | 0.1 / 0.0 / - / 0.2 ms |
+| lat50_loss5 | 5 / 5.07% | 1.96 pkts | 50, 20 ms | 50.3 / 19.7 / 97.6 / 120.5 ms |
+| lat100_loss15 | 15 / 14.48% | 2.09 pkts | 100, 40 ms | 100.5 / 39.7 / 192.4 / 241.0 ms |
+| lat200_loss30 | 30 / 28.2% | 2.05 pkts | 200, 80 ms | 201.7 / 80.3 / 387.1 / 481.9 ms |
+
+Loss is within ~2 points of nominal (the Markov chain's run-to-run spread over 6000 probes is about that large). Delay mean
+and sd match; the clamping of negative normal draws is negligible at jitter = 0.4 ms (2.5 sigma).
+
+## Parallel slots (`SS_SLOT`)
+
+`SS_SLOT=<n>` (one digit 0-9; default empty = everything above, unchanged) gives an independent copy of the whole setup, so
+several matches can run at once (`batch_matches --parallel K`, slots 0..K-1):
+
+| | slot empty | slot n |
+|---|---|---|
+| namespaces | `ss-r1..` | `ss<n>-r1..` |
+| bridge | `br-sim` 10.77.0.1/24 | `br-sim<n>` 10.77.<n+1>.1/24 |
+| robot i | 10.77.0.(10+i) | 10.77.<n+1>.(10+i) |
+| veth host / peer / ifb | `ssh<i>` `ssv<i>` `ssi<i>` | `ssh<n>_<i>` `ssv<n>_<i>` `ssi<n>_<i>` |
+| state dir | /tmp/ss-netem-state | /tmp/ss-netem-state<n> |
+
+All names are <= 15 characters and start with `ss` or `br-sim`, so the "only ss* / br-sim* is touched" rule holds.
+`scripts/netem.sh names` prints them without root; `soccer_launcher.netns.slot_names` computes the same (a test compares the two).
+The launcher side: `LaunchConfig.netns_slot` or `$SS_SLOT`; the brains get `ns_prefix:=ss<n>-r`, `game_control_ip` = the slot's
+gateway and the slot's broadcast as `communication.discovery_address`. The bridge's team-packet counter binds to the slot's
+broadcast address (`match_node --packet-bind`) so two bridges do not count each other's packets. Slots are independent of
+`SS_ROBOTS` (per-slot namespaces 1..N).
 
 ## Measured (UDP probes 64 B, 200 pkt/s, sender port 30001 in ss-r1 to broadcast 10.77.0.255:10131, receiver in ss-r2)
 
@@ -79,7 +130,6 @@ mean is a little above 150 ms and ~10% of packets are near-instant. Jittered del
 - Team ports are matched by destination port only. DDS domains 9 to 11 use UDP ports around 10000 and could collide; the
   default domain base 70 is fine. Change the ports with `SS_TEAM_PORTS`.
 - The blackout revert timer is a background shell job: it does not survive `down` or a reboot.
-- Not integrated with `soccer_launcher` yet.
 
 ## Launcher (network profile)
 

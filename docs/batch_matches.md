@@ -11,6 +11,65 @@ seconds of PLAY (after `--ready-secs`, default 6). Output: one CSV row per match
 `<out stem>_<profile>_<brain>_<n>.json` (per robot, per team, every ball event) plus the match log next to it.
 Uses ROS domains from `--domain-base` (150) and no web port, so it can run beside a normal launch.
 
+Options added later: `--trace`, `--record A:B`, `--parallel K`, `--yolo` (GPU), profiles `lat<ms>_loss<pct>` (netem.md). Each is below.
+
+## Trace (`--trace`) and replay
+
+`--trace` makes the bridge write `<stem>.trace.jsonl` next to the match JSON (`match_node --trace-out`, which needs
+`--metrics-out`: it reuses the metrics sampling, `MatchBridge._record_metrics`, so it shares its definitions). One JSON row per
+0.1 s of PLAY (simulated time; nothing during READY/SET/stoppages): `t` (PLAY seconds), `ball` (ground truth x, y, vx, vy),
+`blackout`, and `robots`: `id`, `team`, truth pose `x, y, theta`, `decision`, `player_role`, `im_lead`, `outfield_rank`,
+`role_own_view`, `comm_mode`, `links` (per teammate: `player`, `health`, `latency_ms`, `loss`, from the robot's world model),
+`fused_ball` and `own_ball` (`x, y, valid`, world frame). Fields the brain does not publish are `null`. About 2 MB per 60 s of 5v5.
+
+`scripts/render_replay.py --left a.trace.jsonl [--right b.trace.jsonl] --t0 15 --t1 40 --out clip.mp4 --title-left "new" --title-right
+"baseline" [--poster clip.png]` renders a top-down replay (pitch to scale, team-coloured robots with id + role initial and a
+heading tick, white ring = `im_lead`, link lines whose width/opacity follow the health, comm-mode badge per team, red tint and
+banner in a blackout, PLAY time) at 1280x720, 25 fps, numpy + cv2 (~6 ms per frame for two panels), piped to ffmpeg
+`h264_nvenc -preset p5 -cq 28` (libx264 if NVENC is missing, or `--cpu`). Colours are Okabe-Ito (home blue, away orange; comm
+mode green / yellow / vermillion). A 20 s two-panel clip is about 1 MB.
+
+## MuJoCo 3D clip (`--record A:B`)
+
+`--record 20:40` renders PLAY seconds 20-40 of the first match of each profile (`--record-matches 0,2` or `all` for others) to
+`<stem>.mp4` (and implies `--trace`). `match_node --record out.mp4 --record-window 20:40`. A free camera above the pitch at an
+oblique angle (azimuth 90, elevation -46, 18.5 m), the stripped viewer model (cheap team-coloured bodies), 720p, 25 fps, a label
+per robot (H2 striker LEAD), a legend with the clock, comm mode per team and a blackout banner, h264_nvenc.
+
+The sim does not render. `soccer_sim_bridge/clip_recorder.py` runs the renderer as a second process; the sim only queues the pose
+(25 Hz, a pickle, ~3 KB, never blocks) and the process renders when the match is over, so the match keeps its tick rate and no frame
+is dropped. GL: `SIM_RECORD_GL=cpu` (default, Mesa llvmpipe) or
+`gpu` (the system driver, D3D12 on WSL).
+
+Render cost per frame (720p, 10 stripped robots, readback included), measured in the renderer process: GPU path (Mesa D3D12 on this
+WSL, RTX 4070 Ti) median 251 ms, p95 313 ms; llvmpipe median 36 ms, p95 56 ms in the real 60 s match (about 66 ms in a standalone test while
+the machine was busier). The WSL D3D12 readback stall dominates the GPU number, so `gpu` is ten times over the 10 ms budget and *slower* than software
+here, which is why the default is `cpu`. Both exceed 10 ms, so the renderer is a separate process fed 25 Hz poses and renders after the match instead of
+inside the step loop. Overlay (cv2 labels) 0.7 ms and the pipe write to NVENC ffmpeg 2.8 ms per frame. Effect on the sim: the 60 s verification match with `--record 20:40` ran at `tick_hz_mean`
+50.0 (a match without recording: 50.0); the render of 502 frames (~20 s) happens after PLAY and delays the match JSON by about 20-30 s. A 20 s clip is
+about 1.2 MB.
+
+## YOLO on the GPU
+
+`pixi run -e gpu ...` is the default environment plus onnxruntime-gpu (CUDA 13 wheel; conda-forge cudnn 9, cublas, cufft, curand,
+cudart; the Windows driver's libcuda comes from /usr/lib/wsl/lib). The default environment keeps the CPU onnxruntime (`pixi install -e gpu`
+once). `SIM_YOLO_PROVIDER=auto|cuda|cpu` (default auto: CUDA when onnxruntime has it, else CPU; `cuda` fails if it does not);
+the provider in use is logged (`[yolo] onnxruntime provider in use: ...`); CUDA runs with 1 intra-op thread, CPU with 4.
+`batch_matches --yolo` re-runs itself under `pixi run -e gpu` when the gpu environment exists and the current interpreter has no CUDA
+provider (`SIM_YOLO_PROVIDER=cpu` or `SS_GPU_REEXEC` prevents it). Model latency, 320x320 input, median of 300 runs: CPU
+(4 threads) 8.7 ms, CUDA 2.6 ms (p95 4.2 ms); letterbox preprocessing 0.15 ms.
+
+## Parallel matches (`--parallel K`)
+
+K matches at once, match k in slot k: network slot `SS_SLOT=k` (netem.md: `br-sim<k>`, `ss<k>-rN`, subnet 10.77.<k+1>.0/24), ROS domain
+base `--domain-base + 20 k` (domains 150-159, 170-179, ...; at most 4 with base 150 because of the 232 limit), the bridge's packet counter
+bound to the slot's broadcast address, and its own flag/trace/JSON files (named by profile and match number). No web port. K=1
+(default) keeps the original names and base.
+
+Measured, two 30 s 5v5 `good` matches at once (16 cores): mean `tick_hz` over PLAY 37.1 and 39.0 (target 50; a single match: 50.0).
+Both are below 45, so the brains see a slowed-down world: **default K=1**. `tick_hz_mean` (and `tick_hz_last`) are in each match JSON
+and printed by the runner.
+
 ## Baseline brain (Robotedge 8d241a2, protocol v7)
 
 ```
@@ -34,7 +93,7 @@ runner, not at launch:
    (its own timer, not netem.sh's background job);
 3. the bridge re-reads the `.blackout` file (~5 Hz) and marks each PLAY sample inside `[start, end)` as blackout.
 
-The window is in wall-clock seconds, so if the sim runs slower than real time fewer than T PLAY seconds fall inside it. The
+The window is in seconds of CLOCK_MONOTONIC (time.monotonic, shared by the runner and the bridge; this WSL's wall clock steps by seconds, which once shortened a 15 s window to 10 PLAY s and flagged stray samples), so if the sim runs slower than real time fewer than T PLAY seconds fall inside it. The
 real window is recorded in the match JSON as `blackout_window` (`start_play_s`, `end_play_s`, `duration_s`, in PLAY seconds
 of the recorder) and in `meta.blackout_wall`; the CSV has `blackout_start_play_s`, `blackout_end_play_s`, `blackout_s`.
 The summary has `segments.blackout` and `segments.outside` (team metrics computed over those samples only; a robot's

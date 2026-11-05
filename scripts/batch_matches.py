@@ -76,6 +76,10 @@ def parse_args(argv=None):
     p.add_argument("--players", type=int, default=5, help="players per team (5 = 5v5; ids 1..N, player 1 is the keeper)")
     p.add_argument("--yolo", action="store_true", help="YOLO ball detection from the rendered camera (slow) instead of ground truth")
     p.add_argument("--trace", action="store_true", help="also write <stem>.trace.jsonl next to each match JSON (10 Hz PLAY trace)")
+    p.add_argument("--record", default="", metavar="A:B",
+                   help="also render PLAY seconds A:B as <stem>.mp4 (MuJoCo, free camera above the pitch, 720p/25 fps, GPU GL, NVENC); "
+                        "implies --trace. Which matches: --record-matches")
+    p.add_argument("--record-matches", default="0", help="match numbers (0-based, per profile) to record, comma list or 'all'")
     p.add_argument("--parallel", type=int, default=1, metavar="K",
                    help="run K matches at once, each in its own network slot (SS_SLOT, br-sim<n>), ROS domains spaced by 20 "
                         "(max 4 with --domain-base 150); the sim must keep tick_hz >= 45 or the matches are slowed down")
@@ -112,18 +116,18 @@ def _drive_blackout(spec, window, flag_path: Path, bo_path: Path, cfg, log):
         flag = json.loads(flag_path.read_text())
     except (OSError, ValueError):
         return window  # PLAY has not started
-    now = time.time()
+    now = time.monotonic()
     if window is None:
         if now < flag["wall"] + offset:
             return None
         if not netns._netem(["apply", "blackout"], cfg, log):
             raise SystemExit("could not apply the blackout")
-        window = {"start": time.time(), "end": None, "play_wall": flag["wall"]}
+        window = {"start": time.monotonic(), "end": None, "play_wall": flag["wall"]}
         _write_json(bo_path, window)
         log(f"blackout started {window['start'] - flag['wall']:.1f} s after PLAY")
         return window
     if duration is not None and now >= window["start"] + duration:
-        window["end"] = time.time()  # recorded before the revert command: those samples are certainly blacked out
+        window["end"] = time.monotonic()  # recorded before the revert command: those samples are certainly blacked out
         _write_json(bo_path, window)
         if not netns._netem(["apply", "good"], cfg, log):
             raise SystemExit("could not revert the blackout")
@@ -158,7 +162,9 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, w
              f"--play-flag {flag_path} --blackout-file {bo_path}")
     if slot:  # count only this slot's team broadcasts (the other slots' bridges listen on their own subnets)
         extra += f" --packet-bind {netns.slot_names(slot)['broadcast']}"
-    if args.trace:
+    if args.record and (args.record_matches == "all" or n in {int(x) for x in args.record_matches.split(",")}):
+        extra += f" --record {json_path.with_suffix('.mp4')} --record-window {args.record}"
+    if args.trace or args.record:
         extra += f" --trace-out {json_path.with_suffix('.trace.jsonl')}"
     cfg = _match(_players(ids, ids), continuous=True, network_profile="good" if blackout else profile, viewer=False, simulator="mujoco",
                  ros_domain_id=domain_base, extra_bridge_args=extra)
@@ -168,7 +174,7 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, rcap_root: str, w
     errs = cfg.validate()
     if errs:
         raise SystemExit("; ".join(errs))
-    for stale in (json_path, flag_path, bo_path):
+    for stale in (json_path, flag_path, bo_path, json_path.with_suffix(".mp4")):
         stale.unlink(missing_ok=True)
     t0 = time.monotonic()
     proc, timed_out = None, False
@@ -234,6 +240,8 @@ def _gpu_reexec(args, argv) -> None:
 def main(argv=None) -> int:
     args = parse_args(argv)
     _gpu_reexec(args, argv)
+    if args.record and not re.fullmatch(r"\d+(\.\d+)?:\d+(\.\d+)?", args.record):
+        raise SystemExit("--record takes PLAY seconds as A:B, e.g. 20:40")
     profiles = [p.strip() for p in args.profiles.split(",") if p.strip()]
     bad = [p for p in profiles if not valid_profile(p)]
     if bad:

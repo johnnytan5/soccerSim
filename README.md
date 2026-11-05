@@ -110,6 +110,10 @@ before setup and before every run.
   stalls ~25 ms per frame reading it back, 5x slower than the CPU. The viewer window still uses your
   GPU. `SIM_CAMERA_GL=software` forces llvmpipe on any Linux (e.g. if EGL finds no usable GPU) and
   `SIM_CAMERA_GL=gpu` keeps the system driver. Export `MUJOCO_GL` to override the backend.
+- **YOLO on the GPU (Linux + NVIDIA):** `pixi install -e gpu` once, then `pixi run -e gpu ...` (onnxruntime-gpu, CUDA 13,
+  cuDNN 9; the WSL driver is in /usr/lib/wsl/lib). `SIM_YOLO_PROVIDER=auto|cuda|cpu` (default auto) picks the provider and the log
+  says which one runs; the model takes ~2.6 ms on CUDA and ~8.7 ms on 4 CPU threads. `batch_matches.py --yolo` switches to the gpu
+  environment by itself (docs/batch_matches.md).
 
 ## Control Centre (web launcher + controller)
 

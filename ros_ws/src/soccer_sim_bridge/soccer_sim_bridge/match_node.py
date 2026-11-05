@@ -222,6 +222,9 @@ class MatchBridge:
         self._blackout: tuple[float, float | None] | None = None
         self._blackout_read = 0.0
         self._play_wall0: tuple[float, int] | None = None  # (monotonic, tick_count) at the first PLAY sample: mean tick rate
+        self.clip = None  # soccer_sim_bridge.clip_recorder.ClipRecorder (--record), set by _run_mujoco
+        self.clip_closed = False
+        self.clip_stats: dict = {}
         self.trace_path = ""  # --trace-out: JSONL, one row per 0.1 s of PLAY (sampled in _record_metrics)
         self._trace_file = None
         self._trace_next = 0.0
@@ -539,12 +542,18 @@ class MatchBridge:
         if playing and self._play_wall0 is None:
             self._play_wall0 = (time.monotonic(), self.tick_count)
         if playing and self.play_flag and not os.path.exists(self.play_flag):
-            self._write_json_atomic(self.play_flag, {"wall": time.time(), "sim_t": self.tick_count * self.world.policy_dt})
+            self._write_json_atomic(self.play_flag, {"wall": time.monotonic(), "sim_t": self.tick_count * self.world.policy_dt})
         self.recorder.add(Sample(self.tick_count * self.world.policy_dt, playing, (st["ball"]["x"], st["ball"]["y"]), robots,
                                  blackout=playing and self._in_blackout()))
-        if self._trace_file is not None and playing and self.recorder.play_s >= self._trace_next:
+        clip = self.clip is not None and playing and self.clip.in_window(self.recorder.play_s)
+        trace = self._trace_file is not None and playing and self.recorder.play_s >= self._trace_next
+        if trace or clip:
+            row = self._trace_row(st, views, robots, blackout=playing and self._in_blackout())
+        if trace:
             self._trace_next = max(self._trace_next + TRACE_PERIOD_S, self.recorder.play_s - TRACE_PERIOD_S / 2)  # fixed 10 Hz grid
-            self._write_trace(st, views, robots, blackout=playing and self._in_blackout())
+            self._trace_file.write(json.dumps(row, separators=(",", ":")) + "\n")
+        if clip:  # 25 Hz: the renderer process draws it (clip_recorder.py); the sim only queues the pose
+            self.clip.offer(self.world.mj_data.qpos, row)
         if self.recorder.play_s >= self.metrics_secs or st["state"] == "FINISHED":
             self._write_metrics()
 
@@ -553,8 +562,8 @@ class MatchBridge:
         self.trace_path = path
         self._trace_file = open(path, "w")
 
-    def _write_trace(self, st: dict, views: dict, samples: list, blackout: bool) -> None:
-        """One JSONL row: PLAY time, ground-truth ball, and per robot the truth pose, brain signals, links and ball estimates."""
+    def _trace_row(self, st: dict, views: dict, samples: list, blackout: bool) -> dict:
+        """One trace row: PLAY time, ground-truth ball, and per robot the truth pose, brain signals, links and ball estimates."""
         vx, vy = (float(v) for v in self.world.ball_velocity()[:2])
         rows = []
         for r, smp in zip(st["robots"], samples):
@@ -576,7 +585,11 @@ class MatchBridge:
         row = {"t": round(self.recorder.play_s, 3), "ball": {"x": round(st["ball"]["x"], 3), "y": round(st["ball"]["y"], 3),
                                                               "vx": round(vx, 3), "vy": round(vy, 3)},
                "blackout": blackout, "robots": rows}
-        self._trace_file.write(json.dumps(row, separators=(",", ":")) + "\n")
+        return row
+
+    def _close_clip(self) -> None:
+        self.clip_closed = True
+        self.clip_stats = self.clip.close()
 
     @staticmethod
     def _write_json_atomic(path: str, doc: dict) -> None:
@@ -589,7 +602,7 @@ class MatchBridge:
         """Wall-clock window the batch runner wrote to --blackout-file (it applies the netem blackout itself)."""
         if not self.blackout_file:
             return False
-        now = time.time()
+        now = time.monotonic()
         if now - self._blackout_read > 0.2:  # re-read a few times a second, not every sample
             self._blackout_read = now
             try:
@@ -611,10 +624,13 @@ class MatchBridge:
         return round((self.tick_count - n0) / max(time.monotonic() - t0, 1e-6), 1)
 
     def _write_metrics(self) -> None:
+        tick_hz_mean = self._tick_hz_mean()  # before the clip render, which runs with the sim loop stalled
+        if self.clip is not None and not self.clip_closed:
+            self._close_clip()
         score = dict(self.gc.score)
         doc = {"meta": self.metrics_meta, "score": {"home": score.get(HOME, 0), "away": score.get(AWAY, 0)},
                "tick_hz_last": round(self.tick_hz, 1),
-               "tick_hz_mean": self._tick_hz_mean(), **self.recorder.summary()}
+               "tick_hz_mean": tick_hz_mean, "record": self.clip_stats, **self.recorder.summary()}
         with open(self.metrics_out, "w") as f:
             json.dump(doc, f, indent=1)
         self._log(f"metrics written to {self.metrics_out}")
@@ -685,6 +701,10 @@ class MatchBridge:
                 self._log(f"sim ticking at {self.tick_hz:.0f} Hz (target 50): brains see a slowed-down world")
 
     def close(self) -> None:
+        if self.clip is not None and not self.clip_closed:
+            self._close_clip()
+        if self._trace_file is not None:
+            self._trace_file.close()
         self.packet_counter.close()
         if self.web is not None:
             self.web.stop()
@@ -802,6 +822,9 @@ def parse_args(argv):
     p.add_argument("--play-flag", default="", help="file written when PLAY first starts (the batch runner polls it)")
     p.add_argument("--blackout-file", default="", help="JSON {start,end} (wall clock) of a runner-applied blackout window")
     p.add_argument("--trace-out", default="", help="with --metrics-out: JSONL trace of the PLAY phase at 10 Hz (ball, robots, roles, links)")
+    p.add_argument("--record", default="", help="with --metrics-out: MP4 of a window of the match, rendered from a free camera "
+                   "above the pitch (720p, 25 fps, GPU GL, h264_nvenc) by a separate process")
+    p.add_argument("--record-window", default="20:40", help="PLAY seconds a:b of --record")
     p.add_argument("--metrics-meta", default="{}", help="JSON object copied into the metrics file")
     return p.parse_args(argv)
 
@@ -822,6 +845,11 @@ def _run_mujoco(args, bridge: MatchBridge, cfg: SimConfig, roster, viewer_env) -
     viewer_model = (build_world(cfg, len(roster), strip_visual=True)
                     if args.viewer and not args.detailed_bodies else w.mj_model)
     link, mirror = None, None
+    if args.record:
+        from .clip_recorder import ClipRecorder
+        a, _, b = args.record_window.partition(":")
+        bridge.clip = ClipRecorder(build_world(cfg, len(roster), strip_visual=True), tints, args.record, (float(a), float(b)),
+                                   bridge._log, os.environ.get("SIM_RECORD_GL", "cpu"))
     try:
         if args.viewer and sys.platform == "darwin":
             import mujoco.viewer
@@ -877,8 +905,10 @@ def main(argv=None) -> None:
         bridge.play_flag, bridge.blackout_file = args.play_flag, args.blackout_file
         if args.trace_out:
             bridge.enable_trace(args.trace_out)
-    elif args.trace_out:
-        raise SystemExit("--trace-out needs --metrics-out (it reuses the metrics sampling)")
+    elif args.trace_out or args.record:
+        raise SystemExit("--trace-out / --record need --metrics-out (they reuse the metrics sampling)")
+    if args.record and kinematic:
+        raise SystemExit("--record renders the MuJoCo world; use the replay renderer on a trace for the 2D simulator")
     try:
         if kinematic:
             _run_realtime(bridge, None, None, args.profile, args.profile_file)

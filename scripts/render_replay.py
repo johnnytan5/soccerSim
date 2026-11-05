@@ -15,8 +15,6 @@ import argparse
 import bisect
 import json
 import math
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -28,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from soccer_sim.config import FieldDims  # noqa: E402
 from soccer_sim.field_geometry import field_lines  # noqa: E402
+from soccer_sim.video import encoder_args, find_ffmpeg, open_encoder  # noqa: E402
 
 W, H, FPS = 1280, 720, 25
 HEADER_H, FOOTER_H = 46, 104
@@ -179,37 +178,6 @@ class Panel:
             cv2.rectangle(img, (rx, ry), (rx + rw, ry + 30), (30, 30, 200), -1)
             cv2.putText(img, "TEAM LINK BLACKOUT", (rx + rw // 2 - 125, ry + 22), FONT, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
         canvas[:, self.x0:self.x0 + self.w] = img
-
-
-# ---- encoding ------------------------------------------------------------------------------------------------
-def find_ffmpeg() -> str:
-    for cand in (ROOT / ".pixi" / "envs" / "default" / "bin" / "ffmpeg", ROOT / ".pixi" / "envs" / "gpu" / "bin" / "ffmpeg"):
-        if cand.exists():
-            return str(cand)
-    found = shutil.which("ffmpeg")
-    if not found:
-        raise SystemExit("ffmpeg not found (pixi env or PATH)")
-    return found
-
-
-def nvenc_ok(ffmpeg: str) -> bool:
-    p = subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.2", "-c:v", "h264_nvenc",
-                        "-f", "null", "-"], capture_output=True)
-    return p.returncode == 0
-
-
-def encoder_args(ffmpeg: str, force_cpu: bool = False) -> tuple[list[str], str]:
-    """(output codec arguments, name). NVENC: constant quality 28 (VBR, no bitrate target), P5; x264 fallback."""
-    if not force_cpu and nvenc_ok(ffmpeg):
-        return (["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "28", "-b:v", "0", "-maxrate", "2M", "-bufsize", "4M",
-                 "-pix_fmt", "yuv420p", "-movflags", "+faststart"], "h264_nvenc")
-    return ["-c:v", "libx264", "-preset", "medium", "-crf", "28", "-maxrate", "2M", "-bufsize", "4M", "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart"], "libx264"
-
-
-def open_encoder(ffmpeg: str, out: str, codec_args: list[str], w: int, h: int, fps: int) -> subprocess.Popen:
-    return subprocess.Popen([ffmpeg, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", str(fps),
-                             "-i", "-", "-an", *codec_args, out], stdin=subprocess.PIPE)
 
 
 def main(argv=None) -> int:
