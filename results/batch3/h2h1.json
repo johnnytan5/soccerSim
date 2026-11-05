@@ -1,0 +1,49 @@
+{
+ "perspective": "current",
+ "rows": [
+  {
+   "profile": "good",
+   "own_brain": "current",
+   "opp_brain": "baseline",
+   "own_network": "good",
+   "opp_network": "good",
+   "n": 6,
+   "goal_diff_mean": -0.3333333333333333,
+   "goal_diff_ci_lo": -0.8752595674978225,
+   "goal_diff_ci_hi": 0.20859290083115595,
+   "goals_for_mean": 0.0,
+   "goals_for_ci_lo": 0.0,
+   "goals_for_ci_hi": 0.0,
+   "goals_against_mean": 0.3333333333333333,
+   "goals_against_ci_lo": -0.20859290083115595,
+   "goals_against_ci_hi": 0.8752595674978225,
+   "wins": 0,
+   "draws": 4,
+   "losses": 2,
+   "p_sign": 0.5,
+   "p_wilcoxon": 0.34577858615116025
+  },
+  {
+   "profile": "rcap_bad",
+   "own_brain": "current",
+   "opp_brain": "baseline",
+   "own_network": "rcap_bad",
+   "opp_network": "rcap_bad",
+   "n": 6,
+   "goal_diff_mean": -0.3333333333333333,
+   "goal_diff_ci_lo": -0.8752595674978225,
+   "goal_diff_ci_hi": 0.20859290083115595,
+   "goals_for_mean": 0.16666666666666666,
+   "goals_for_ci_lo": -0.26176363927271884,
+   "goals_for_ci_hi": 0.5950969726060522,
+   "goals_against_mean": 0.5,
+   "goals_against_ci_lo": -0.07479957262089865,
+   "goals_against_ci_hi": 1.0747995726208988,
+   "wins": 0,
+   "draws": 4,
+   "losses": 2,
+   "p_sign": 0.5,
+   "p_wilcoxon": 0.34577858615116025
+  }
+ ]
+}
