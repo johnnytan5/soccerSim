@@ -70,18 +70,18 @@ def test_pooling_labels_pct_change_and_signal(tmp_path):
         row("good", "baseline", 10, 10, home_role_signal="decision", away_role_signal="decision")])
     s = sb.build([cur, base], [], {"new": "n", "pre": "p"})
     r = {(x["brain"], x["metric"]): x for x in s["rows"] if x["profile"] == "good"}
-    assert r[("new", "role_flips_per_min")]["n"] == 4          # 2 matches x 2 teams
+    assert r[("new", "role_flips_per_min")]["n"] == 2          # n = matches: (4+6)/2 and (8+2)/2
     assert r[("new", "role_flips_per_min")]["mean"] == 5
     assert r[("new", "role_flips_per_min")]["median"] == 5
     assert r[("pre", "role_flips_per_min")]["mean"] == 10
-    assert r[("new", "goals")]["n"] == 4 and r[("new", "goals")]["mean"] == 1.5
-    assert r[("new", "goal_diff")]["mean"] == 0                # +1 home, -1 away
+    assert r[("new", "goals")]["n"] == 2 and r[("new", "goals")]["mean"] == 1.5
+    assert ("new", "goal_diff") not in r                       # identically 0 for same-brain matches
     t = [x for x in s["tests"] if x["metric"] == "role_flips_per_min"][0]
     assert t["pct_change"] == pytest.approx(-50)
     assert 0 <= t["p_mwu"] <= 1
     assert "player_role" in t["signal_note"] and "decision" in t["signal_note"]
     assert "role_flips_per_min" in s["meta"]["notes"]
-    assert s["meta"]["n_matches"] == 4 and s["meta"]["brains"] == {"new": "n", "pre": "p"}
+    assert s["meta"]["n_matches"] == 4 and s["meta"]["unit"] == "match" and s["meta"]["n"] == 4 and s["meta"]["brains"] == {"new": "n", "pre": "p"}
 
 
 def test_pct_change_null_when_pre_zero_and_new_only_metric(tmp_path):
@@ -178,3 +178,20 @@ def test_h2h_cli_and_isolated_group(tmp_path, capsys):
     assert sb.main(["--h2h", str(a), "--out", str(tmp_path / "o.json")]) == 0
     assert "n=3" in capsys.readouterr().out
     assert json.loads((tmp_path / "o.json").read_text())["rows"][0]["opp_network"] == "blackout"
+
+
+def test_per_match_reduction_and_independent_inference(tmp_path):
+    # match values: (1+3)/2 = 2, (10+10)/2 = 10, a team with a missing value contributes the other team's: 7
+    cur = write(tmp_path / "c.csv", [row("good", "current", 1, 3), row("good", "current", 10, 10), row("good", "current", 7, "")])
+    base = write(tmp_path / "b.csv", [row("good", "baseline", 20, 20), row("good", "baseline", 22, 22), row("good", "baseline", 24, 24)])
+    s = sb.build([cur, base], [], {"new": "n", "pre": "p"})
+    r = [x for x in s["rows"] if x["brain"] == "new" and x["metric"] == "role_flips_per_min"][0]
+    assert r["n"] == 3 and r["mean"] == pytest.approx(19 / 3) and r["median"] == 7
+    # CI from the 3 per-match values (t, df = 2), not from 6 team samples
+    m, lo, hi = sb.mean_ci([2, 10, 7])
+    assert (r["ci_lo"], r["ci_hi"]) == (pytest.approx(lo), pytest.approx(hi))
+    t = [x for x in s["tests"] if x["metric"] == "role_flips_per_min"][0]
+    assert t["p_mwu"] == pytest.approx(sb.mann_whitney_p([2, 10, 7], [20, 22, 24]))
+    assert not [x for x in s["rows"] if x["metric"] == "goal_diff"]
+    assert set(r) >= {"profile", "brain", "metric", "n", "mean", "ci_lo", "ci_hi", "median"}
+    assert set(s) == {"meta", "rows", "tests", "sweeps"}

@@ -5,7 +5,9 @@
       --sweep results/batch2/sweep_current.csv results/batch2/sweep_baseline.csv \
       --out results/batch2/summary.json --csv results/batch2/summary.csv
 
-Home and away team values of a match are pooled as separate samples (n = 2 x matches per profile and brain). Brain column
+The two teams of a same-brain match are not independent (one match, one ball, one network), so each metric is reduced to
+one value per match, the mean of the home and away team values (a team without a value is skipped); n = matches. goal_diff is
+identically 0 for that reduction and is not reported here (head-to-head: --h2h). Brain column
 `current` -> `new`, `baseline` -> `pre`. Statistics are pure Python (no scipy): Student t 95% CI, Mann-Whitney U two-sided
 (normal approximation, tie and continuity corrected), pct_change = (new - pre) / pre * 100 (null if pre is 0).
 """
@@ -30,7 +32,7 @@ METRICS = [
 SEG_METRICS = ["role_flips_per_min", "lead_changes_per_min", "duplicate_striker_frac",
                "reaction_median_s", "reaction_p90_s", "reaction_censored"]
 SIGNAL_COL = {"role_flips_per_min": "role_signal", "duplicate_striker_frac": "duplicate_signal"}
-ALL_METRICS = METRICS + ["goal_diff", "goals"] + [f"{s}_{m}" for s in ("bo", "out") for m in SEG_METRICS]
+ALL_METRICS = METRICS + ["goals"] + [f"{s}_{m}" for s in ("bo", "out") for m in SEG_METRICS]
 SWEEP_RE = re.compile(r"^lat(\d+(?:\.\d+)?)_loss(\d+(?:\.\d+)?)$")
 
 
@@ -245,7 +247,7 @@ def num(s):
 
 
 class Store:
-    """samples[(profile, brain, metric)] -> list of team values; signals[(profile, brain, metric)] -> set of strings."""
+    """samples[(profile, brain, metric)] -> list of per-match values (mean of the two teams); signals[(profile, brain, metric)] -> set of strings."""
 
     def __init__(self):
         self.samples = defaultdict(list)
@@ -267,24 +269,24 @@ class Store:
                 ps = num(row.get("play_s"))
                 if ps is not None:
                     self.play_s.append(ps)
-                gd = num(row.get("goal_diff"))
-                for team, sign, gcol in (("home", 1, "goals_home"), ("away", -1, "goals_away")):
+                per_match = defaultdict(list)  # metric -> [home value, away value]
+                for team, gcol in (("home", "goals_home"), ("away", "goals_away")):
                     g = num(row.get(gcol))
                     if g is not None:
-                        self.samples[(prof, brain, "goals")].append(g)
-                    if gd is not None:
-                        self.samples[(prof, brain, "goal_diff")].append(sign * gd)
+                        per_match["goals"].append(g)
                     for m in METRICS:
-                        self._take(row, team, prof, brain, m, m)
+                        self._take(row, team, prof, brain, m, m, per_match)
                     for seg in ("bo", "out"):
                         for m in SEG_METRICS:
-                            self._take(row, team, prof, brain, f"{seg}_{m}", f"{seg}_{m}", sig_of=m)
+                            self._take(row, team, prof, brain, f"{seg}_{m}", f"{seg}_{m}", per_match, sig_of=m)
+                for metric, vals in per_match.items():
+                    self.samples[(prof, brain, metric)].append(sum(vals) / len(vals))  # one value per match
 
-    def _take(self, row, team, prof, brain, col, metric, sig_of=None):
+    def _take(self, row, team, prof, brain, col, metric, per_match, sig_of=None):
         v = num(row.get(f"{team}_{col}"))
         if v is None:
             return
-        self.samples[(prof, brain, metric)].append(v)
+        per_match[metric].append(v)
         sig = SIGNAL_COL.get(sig_of or metric)
         if sig:
             s = (row.get(f"{team}_{sig}") or "").strip()
@@ -359,10 +361,12 @@ def build(main_paths, sweep_paths, brains):
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "brains": brains,
         "n_matches": n_matches,
+        "unit": "match",  # every row's n counts matches: one value per match (mean of the two teams)
+        "n": n_matches,
         "duration_s": round(sum(plays) / len(plays), 2) if plays else None,
         "profiles": main.profiles,
-        "notes": ("Home and away teams pooled (n = 2 x matches). CI: Student t 95%. p_mwu: Mann-Whitney U two-sided. "
-                  "goals/goal_diff are from each team's own perspective. "
+        "notes": ("One value per match (mean of the home and away team values), n = matches. CI: Student t 95%. "
+                  "p_mwu: Mann-Whitney U two-sided on the per-match values. goals = mean goals per team per match. "
                   + ("; ".join(sorted(set(notes))) if notes else "No signal differences between brains.")),
     }
     return {"meta": meta, "rows": rows, "tests": tests, "sweeps": sweeps}
