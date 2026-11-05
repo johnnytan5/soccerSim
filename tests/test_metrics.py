@@ -118,6 +118,17 @@ def test_reaction_by_decision_change():
     assert len(ev) == 1 and abs(ev[0]["reaction_s"] - 1.0) < 0.15
 
 
+def test_switch_between_chasing_decisions_is_not_a_reaction():
+    rec = MetricsRecorder()
+    # H2 chases facing away at the event, then flickers chase -> auto_visual_kick: still facing away, so censored
+    def make(t):
+        ball = (0.0, 5.0) if t < 2.0 else (5.0, 0.0)
+        return ball, [robot("H2", "auto_visual_kick" if t >= 2.5 else "chase", yaw=math.pi)]
+    feed(rec, 12.0, make)
+    ev = rec.summary()["ball_events"]
+    assert len(ev) == 1 and ev[0]["reaction_s"] is None
+
+
 def test_unreacted_event_is_censored_and_keeper_is_not_the_nearest():
     rec = MetricsRecorder()
     def make(t):

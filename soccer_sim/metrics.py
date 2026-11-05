@@ -22,8 +22,9 @@ Signals (all documented in docs/batch_matches.md):
                  through KICK_SPEED_MS from below (a kick).
   reaction time  events where the nearest eligible robot already faces the ball within 30 degrees AND is already chasing
                  are excluded (counted in reaction_excluded), not scored 0. Otherwise from the event until the team's nearest robot (not the keeper; for a kick not a robot that was within
-                 KICKER_M of the ball, which is most likely the kicker) faces the ball within 30 degrees, or switches
-                 to a chasing decision it was not in at the event. Censored (None) after REACTION_TIMEOUT_S. Reported as median and
+                 KICKER_M of the ball, which is most likely the kicker) faces the ball within 30 degrees, or enters
+                 the chasing decisions (CHASE_DECISIONS) from a decision outside them; a switch between two chasing
+                 decisions (e.g. chase <-> auto_visual_kick) is not a reaction. Censored (None) after REACTION_TIMEOUT_S. Reported as median and
                  p90 over the uncensored events plus the censored count.
 """
 from __future__ import annotations
@@ -297,7 +298,7 @@ class MetricsRecorder:
             reacted = False
             if r is not None:
                 facing = _facing(r, s.ball)
-                switched = chasing(r.decision) and r.decision != ev.decision0
+                switched = chasing(r.decision) and not chasing(ev.decision0)  # enter the chase family; chase<->AVK flicker is not a reaction
                 reacted = facing or switched
             if reacted:
                 self.events.append({"t": round(ev.t0, 2), "kind": ev.kind, "team": ev.team, "robot": ev.robot,
