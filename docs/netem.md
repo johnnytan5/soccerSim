@@ -129,6 +129,10 @@ mean is a little above 150 ms and ~10% of packets are near-instant. Jittered del
   receivers (a real router also loses per receiver).
 - Team ports are matched by destination port only. DDS domains 9 to 11 use UDP ports around 10000 and could collide; the
   default domain base 70 is fine. Change the ports with `SS_TEAM_PORTS`.
+- `apply` runs the robots in parallel and, once a device has the prio + u32 structure, only does `tc qdisc change` on the
+  netem leaf, so filters are never removed during a profile change (no window in which team packets bypass netem). The batch
+  runner records a blackout as start (before the apply) / apply_s / revert_begin (before the revert) / end (after it) and the
+  metrics treat the two ramps as neither blackout nor outside (see docs/batch_matches.md).
 - The blackout revert timer is a background shell job: it does not survive `down` or a reboot.
 
 ## Launcher (network profile)

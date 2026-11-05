@@ -90,7 +90,16 @@ pixi run python scripts/batch_matches.py --profiles good,rcap_bad --matches 10 -
 - `--home-network P` / `--away-network P` give one team's five robots profile P (per-robot overrides, `home1..5=P`); the
   scenario profile from `--profiles` applies to the other team. A permanent `blackout` (no `:T`) isolates the team for the
   whole match. Not combinable with a `blackout:T@O` scenario profile (that one is applied to all robots by the runner).
-- Output names carry `<home>-vs-<away>` instead of the brain. The CSV/JSON get `home_brain`, `away_brain`, `home_profile`,
+  With the default sender-side netem these options impair only that team's *transmissions* (what the team sends reaches
+  everybody impaired, but the team still hears the other team's packets cleanly; a `blackout` additionally cuts the downlink
+  of its robots). True per-receiver semantics (the team's reception is what is degraded) need `SS_NETEM_INGRESS=1`.
+- Output names carry `<home>-vs-<away>` instead of the brain, and `_home-<P>` / `_away-<P>` when the per-team networks are set.
+- `--parallel K>1` is refused unless every robot is namespaced (no `none` profile, also not via the other team).
+- SIGINT/SIGTERM kill every running match's process group first, then run `netem.sh down` for the slots in use.
+- With `--record` the metrics JSON is written before the clip is closed; the runner allows 600 s extra wall time for the render.
+- Appending to a CSV whose header differs (older columns) is refused; write to a new `--out` or rewrite the header.
+- `summarise_batch.py --main` reduces each metric to one value per match (mean of home and away) and reports `n` = matches,
+  `meta.unit = "match"`; `goal_diff` is only in the `--h2h` output. The CSV/JSON get `home_brain`, `away_brain`, `home_profile`,
   `away_profile` (last four CSV columns, so older CSVs stay aligned); the `brain` column is `current-vs-baseline` etc., so
   `summarise_batch.py --main` ignores mixed rows.
 - Swapping sides: run a second set with home and away exchanged (and the same seeds), writing to another CSV.
@@ -127,10 +136,27 @@ the first PLAY of the match, then returns to `good`. Plain `blackout` never reve
 runner, not at launch:
 
 1. the bridge writes `<out stem>_<profile>_<brain>_<n>.play` (JSON, wall clock) when it records its first PLAY sample;
-2. the runner polls it, waits O wall seconds, runs `netem.sh apply blackout`, and writes `<...>.blackout`
-   (`{"start": wall, "end": null}`) when the profile is in force; at start + T it writes `end` and runs `netem.sh apply good`
-   (its own timer, not netem.sh's background job);
-3. the bridge re-reads the `.blackout` file (~5 Hz) and marks each PLAY sample inside `[start, end)` as blackout.
+2. the runner polls it, waits O wall seconds, and drives the transitions itself (not netem.sh's background timer),
+   keeping the window file `<...>.blackout` up to date: `start` is taken BEFORE `netem.sh apply blackout` begins; after it
+   returns `apply_s` is written; T seconds later `revert_begin` is written BEFORE `netem.sh apply good` begins, and `end`
+   and `revert_s` after it returned (all CLOCK_MONOTONIC seconds). netem.sh applies all robots in parallel and only changes
+   the netem leaf qdisc in place once the prio/u32 structure exists (the filters are never deleted and re-added on a
+   blackout or revert), so a transition takes about one robot's time, and the teams are treated alike;
+3. the bridge re-reads the `.blackout` file (~5 Hz) and classifies each PLAY sample (`soccer_sim.metrics.window_state`):
+   `[start, start+apply_s)` and `[revert_begin, end)` are **ramps** (some robots are already, or still, impaired), the rest
+   of `[start+apply_s, revert_begin)` is **dark**, anything else is outside. Ramp samples are counted in neither segment
+   (`Sample.ramp`): `segments.blackout` holds only fully-dark samples and `segments.outside` only samples that are
+   certainly unimpaired. This was chosen over a per-sample margin because the runner knows the exact transition times and the
+   bridge needs no tuning. T is the dark time, measured from the end of the apply. `apply_s` and `revert_s` are in the match
+   meta (`blackout_wall`, `blackout_apply_s`, `blackout_revert_s`) and the CSV (`blackout_apply_s`, `blackout_revert_s`,
+   the last columns).
+
+`T` and `O` are **wall-clock seconds** (CLOCK_MONOTONIC), not simulated seconds. The brains do not use sim time: soccerSim's
+`match.launch.py` does not set `use_sim_time` and nothing publishes `/clock`, so every `brain_node` runs on the wall/steady
+clock (the sim stepping itself is simulated time, in the bridge). If the sim ticks below real time (`tick_hz` < 50, e.g. with
+`--parallel` or `--yolo`), the brains still experience a T-second blackout, but fewer than T seconds of PLAY (and of the
+metrics' simulated clock) fall inside it, and the offset O is reached after fewer PLAY seconds; read the realised window
+from `blackout_window` (PLAY seconds) rather than from T and O.
 
 The window is in seconds of CLOCK_MONOTONIC (time.monotonic, shared by the runner and the bridge; this WSL's wall clock steps by seconds, which once shortened a 15 s window to 10 PLAY s and flagged stray samples), so if the sim runs slower than real time fewer than T PLAY seconds fall inside it. The
 real window is recorded in the match JSON as `blackout_window` (`start_play_s`, `end_play_s`, `duration_s`, in PLAY seconds
