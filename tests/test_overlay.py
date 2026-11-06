@@ -126,3 +126,13 @@ def test_one_timer_per_team_newest_event():
         rt.update(r)
     home = [x for x in rt.display(4.0)["timers"] if x["team"] == "home"]
     assert len(home) == 1 and home[0]["elapsed"] <= 1.1
+
+
+def test_instant_reaction_is_still_shown():
+    rt = ReactionTimer()
+    rows = _reaction_rows(None)
+    for r in rows[:12]:
+        r["robots"][1]["theta"] = -math.pi / 2  # facing the ball when it jumps
+        rt.update(r)
+    home = [x for x in rt.display(1.2)["timers"] if x["team"] == "home"]
+    assert home and not home[0]["running"] and home[0]["elapsed"] == 0.0

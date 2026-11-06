@@ -554,7 +554,8 @@ class MatchBridge:
         if trace:
             self._trace_next = max(self._trace_next + TRACE_PERIOD_S, self.recorder.play_s - TRACE_PERIOD_S / 2)  # fixed 10 Hz grid
             self._trace_file.write(json.dumps(row, separators=(",", ":")) + "\n")
-        if clip:  # 25 Hz: the renderer process draws it (clip_recorder.py); the sim only queues the pose
+        if clip:  # 25 Hz: the renderer process draws it (clip_recorder.py); the sim only queues the pose and the trace row
+            # (ball, blackout, per robot decision, outfield_rank, im_lead, comm_mode, fused_ball: what the overlays need)
             self.clip.offer(self.world.mj_data.qpos, row)
         if self.recorder.play_s >= self.metrics_secs or st["state"] == "FINISHED":
             self._write_metrics()
@@ -851,8 +852,11 @@ def _run_mujoco(args, bridge: MatchBridge, cfg: SimConfig, roster, viewer_env) -
     if args.record:
         from .clip_recorder import ClipRecorder
         a, _, b = args.record_window.partition(":")
+        meta = bridge.metrics_meta or {}
+        brains = [b for b in dict.fromkeys((meta.get("home_brain"), meta.get("away_brain"))) if b] or [meta.get("brain") or ""]
+        caption = {"label": " vs ".join(brains), "situation": meta.get("profile"), "seed": meta.get("seed")}
         bridge.clip = ClipRecorder(build_world(cfg, len(roster), strip_visual=True), tints, args.record, (float(a), float(b)),
-                                   bridge._log, os.environ.get("SIM_RECORD_GL", "cpu"))
+                                   bridge._log, os.environ.get("SIM_RECORD_GL", "cpu"), caption)
     try:
         if args.viewer and sys.platform == "darwin":
             import mujoco.viewer

@@ -38,6 +38,7 @@ DIM = (190, 190, 190)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 TEXT_SCALE = 0.72                 # HERSHEY_SIMPLEX cap height is ~22 px at scale 1.0, so 0.72 gives ~16 px
 KEEPER_ROLE = "goal_keeper"
+HUD_ROW = int(round(40 * TEXT_SCALE))   # one HUD row in px; a team block (header + four counters) is five rows
 
 DECISION_WORD = {
     "chase": "CHASE", "assist": "ASSIST", "find": "FIND", "kick": "KICK", "adjust": "ADJUST", "dribble": "DRIBBLE",
@@ -181,8 +182,11 @@ class ReactionTimer:
         for e in rec.events[self._n_events:]:
             match = next((r for r in self.records if r["end"] is None and not r["excluded"] and r["team"] == e["team"]
                           and r["robot"] == e["robot"] and abs(round(r["t0"], 2) - e["t"]) < 1e-6), None)
-            if match:
-                match["end"], match["reaction_s"] = s.t, e["reaction_s"]
+            if match is None:  # started and finished in the same sample (the robot already faces the ball)
+                match = {"team": e["team"], "robot": e["robot"], "t0": e["t"], "ball": s.ball, "end": None, "reaction_s": None,
+                         "excluded": False, "kind": e["kind"]}
+                self.records.append(match)
+            match["end"], match["reaction_s"] = s.t, e["reaction_s"]
         self._n_events = len(rec.events)
         self.records = [r for r in self.records if r["end"] is None or s.t - r["end"] < 5.0]
 

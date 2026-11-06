@@ -43,7 +43,7 @@ W, H, FPS = 1280, 720, 25   # canvas for one trace or side by side; --layout sta
 PITCH_BG = (58, 74, 46)     # dark desaturated green, neutral for all colour vision
 PITCH_LINE = (200, 200, 200)
 ROBOT_R_M, BALL_R_M, TICK_M = 0.5, 0.25, 0.95  # drawn larger than the real T2 so the label stays readable
-HUD_ROW = int(round(40 * TEXT_SCALE))           # one HUD row, px; a team block is 5 rows
+HUD_ROW = ov.HUD_ROW
 
 
 def load_trace(path: str) -> dict:
