@@ -39,3 +39,29 @@ def test_panel_draws_robots_and_blackout_tint(tmp_path):
     panel.draw(dark, rr.state_at(tr, 0.1), 0.1)
     assert plain.any() and not np.array_equal(plain, dark)
     assert dark[..., 2].astype(int).sum() > plain[..., 2].astype(int).sum()  # the blackout tint is red
+
+
+def _chase_row(t, decisions):
+    row = _row(t, 0.0)
+    for r, d in zip((r for r in row["robots"] if r["team"] == "home"), decisions):
+        r["decision"] = d
+    return row
+
+
+def test_panel_marks_chasers_and_duplicates(tmp_path):
+    one = _trace(tmp_path, [_chase_row(0.0, ["chase", "standby"]), _chase_row(0.1, ["chase", "standby"])])
+    two = _trace(tmp_path, [_chase_row(0.0, ["chase", "kick"]), _chase_row(0.1, ["chase", "kick"])])
+    red = np.array(rr.ov.DUP_RING, np.uint8)
+    imgs = []
+    for tr in (one, two):
+        img = np.zeros((rr.H, rr.W, 3), np.uint8)
+        rr.Panel(0, rr.W, "x", situation="rcap_bad", seed=3).draw(img, rr.state_at(tr, 0.0), 0.0)
+        imgs.append(img)
+    n = [int((im == red).all(axis=2).sum()) for im in imgs]   # the legend icon has red pixels in both
+    assert n[1] - n[0] > 400                                  # two chasers: a ring on each
+
+
+def test_stacked_and_side_panels_fit():
+    for w in (rr.W, rr.W // 2):
+        p = rr.Panel(0, w, "new brain", situation="rcap_bad", seed=1)
+        assert p.rect[1] >= p.cap_h and p.rect[1] + p.rect[3] <= rr.H - p.footer_h + 8 and p.rect[0] >= 0 and p.rect[0] + p.rect[2] <= w

@@ -1,12 +1,20 @@
 """Top-down replay of one or two match traces (match_node --trace-out / batch_matches --trace) as an MP4.
 
   pixi run python scripts/render_replay.py --left a.trace.jsonl [--right b.trace.jsonl] --t0 15 --t1 40 --out clip.mp4 \
-      [--title-left "new brain"] [--title-right "old brain"] [--poster clip.png]
+      [--title-left "new brain"] [--title-right "old brain"] [--situation rcap_bad] [--seed 1] [--layout side|stacked] \
+      [--poster clip.png]
 
-Draws, to scale on a 1280x720 canvas (side by side with --right): the pitch, robots (circle in team colour, id + role
-initial, heading tick, white-on-black ring for the robot with im_lead), the ball, lines between same-team robots whose
-width and opacity follow the link health, a comm-mode badge per team, a red tint and banner during a blackout, and the
-PLAY time. Numpy + cv2 per frame, piped to ffmpeg h264_nvenc (-preset p5 -cq 28), libx264 when NVENC is unavailable.
+Draws, to scale: the pitch, robots (disc in team colour, id + role initial, heading tick, white-on-black ring for the robot
+with im_lead), the ball, lines between same-team robots whose width and opacity follow the link health, a red tint and banner
+during a blackout, and the PLAY time. Status overlays (soccer_sim/overlay.py, shared with the MuJoCo clip): a decision word and
+outfield rank under each robot, a filled triangle above every chaser (decision in metrics.CHASE_DECISIONS), a red ring on every
+chaser of a team with two or more, each robot's fused-ball belief as a hollow dot joined to the true ball, a flash ring on a ball
+event with the reaction timer next to the ball (final time held ~1 s), a per-team HUD (chase flips, seconds with 2+ chasers,
+seconds with no chaser, mean fused-ball error, worst comm mode; all counted from the clip start) and a caption (brain label,
+network situation, seed) with a legend. Situation and seed default to the match JSON next to the trace.
+Layout: --layout side puts two traces left/right (1280x720, 640 px panels); stacked puts them one above the other (1280x1440,
+full-width panels, bigger pitch and one-line legend). Default: side for one trace, stacked for two.
+Numpy + cv2 per frame, piped to ffmpeg h264_nvenc (-preset p5 -cq 28), libx264 when NVENC is unavailable.
 Colours: Okabe-Ito (home blue, away orange; comm mode green / yellow / vermillion), so it reads for colour-blind viewers.
 """
 from __future__ import annotations
@@ -24,25 +32,18 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from soccer_sim import overlay as ov  # noqa: E402
 from soccer_sim.config import FieldDims  # noqa: E402
 from soccer_sim.field_geometry import field_lines  # noqa: E402
+from soccer_sim.overlay import (BLACKOUT_BGR, DUP_RING, FONT, PAGE_BG, TEAM, TEAM_TEXT, TEXT, TEXT_SCALE,  # noqa: E402
+                                LabelPlacer)
 from soccer_sim.video import encoder_args, find_ffmpeg, open_encoder  # noqa: E402
 
-W, H, FPS = 1280, 720, 25
-HEADER_H, FOOTER_H = 46, 104
-# BGR
-TEAM = {"home": (178, 114, 0), "away": (0, 159, 230)}           # #0072B2 blue, #E69F00 orange
-TEAM_TEXT = {"home": (255, 255, 255), "away": (0, 0, 0)}         # label colour with enough contrast on the disc
-TEAM_NAME = {"home": "HOME", "away": "AWAY"}
-PITCH_BG = (58, 74, 46)                                          # dark desaturated green, neutral for all colour vision
+W, H, FPS = 1280, 720, 25   # canvas for one trace or side by side; --layout stacked makes it W x 2H
+PITCH_BG = (58, 74, 46)     # dark desaturated green, neutral for all colour vision
 PITCH_LINE = (200, 200, 200)
-PAGE_BG = (30, 30, 30)
-MODE_COLOR = {"healthy": (115, 158, 0), "degraded": (66, 228, 240), "isolated": (0, 94, 213)}  # #009E73 #F0E442 #D55E00
-MODE_TEXT = {"healthy": (255, 255, 255), "degraded": (0, 0, 0), "isolated": (255, 255, 255)}
-MODE_RANK = {"healthy": 0, "degraded": 1, "isolated": 2}
-BLACKOUT_BGR = (60, 60, 230)
-FONT = cv2.FONT_HERSHEY_SIMPLEX
 ROBOT_R_M, BALL_R_M, TICK_M = 0.5, 0.25, 0.95  # drawn larger than the real T2 so the label stays readable
+HUD_ROW = int(round(40 * TEXT_SCALE))           # one HUD row, px; a team block is 5 rows
 
 
 def load_trace(path: str) -> dict:
@@ -57,7 +58,8 @@ def _angle_lerp(a: float, b: float, f: float) -> float:
 
 
 def state_at(trace: dict, t: float) -> dict:
-    """The trace at PLAY time t: poses and the ball interpolated between the 10 Hz rows, everything else from the row before."""
+    """The trace at PLAY time t: poses and the ball interpolated between the 10 Hz rows, everything else from the row before.
+    "i" and "row" are the row before t, which the Panel feeds to its running counters once."""
     ts, rows = trace["t"], trace["rows"]
     i = min(max(bisect.bisect_right(ts, t) - 1, 0), len(rows) - 1)
     a = rows[i]
@@ -71,53 +73,71 @@ def state_at(trace: dict, t: float) -> dict:
         robots.append({**r, "x": r["x"] + (n["x"] - r["x"]) * f, "y": r["y"] + (n["y"] - r["y"]) * f,
                        "theta": _angle_lerp(r["theta"], n["theta"], f)})
     ball = {k: a["ball"][k] + (b["ball"][k] - a["ball"][k]) * f for k in ("x", "y")}
-    return {"ball": ball, "robots": robots, "blackout": a["blackout"], "covered": ts[0] - 0.2 <= t <= ts[-1] + 0.2}
+    return {"ball": ball, "robots": robots, "blackout": a["blackout"], "covered": ts[0] - 0.2 <= t <= ts[-1] + 0.2,
+            "i": i, "row": a}
 
 
 class Panel:
-    """One pitch drawn into the rectangle (x0, 0, w, H) of the canvas."""
+    """One pitch with its caption, HUD and legend, drawn into the rectangle (x0, y0, w, H) of the canvas."""
 
-    def __init__(self, x0: int, w: int, title: str, fd: FieldDims | None = None):
-        self.x0, self.w, self.title = x0, w, title
-        fd = fd or FieldDims()
-        self.fd = fd
-        avail_w, avail_h = w - 24, H - HEADER_H - FOOTER_H - 8
+    def __init__(self, x0: int, w: int, title: str, fd: FieldDims | None = None, situation: str | None = None, seed=None,
+                 y0: int = 0):
+        self.x0, self.y0, self.w, self.title = x0, y0, w, title
+        self.fd = fd = fd or FieldDims()
+        self.label, self.situation_line = ov.caption_text(title, situation, seed)
+        self.cap_h = ov.caption_height(w, self.label, self.situation_line)
+        self.wide = w >= 1000
+        self.block_w = 340 if self.wide else (w - 36) // 2
+        hud_h = HUD_ROW * 5
+        if self.wide:   # HUD blocks on the left of the footer, time and legend on the right
+            self.legend_w = w - 2 * self.block_w - 24 - 36
+            self.footer_h = max(hud_h, 46 + ov.legend_height(self.legend_w)) + 10
+        else:           # HUD blocks, then time, then the legend (wrapped), all full width
+            self.legend_w = w - 24
+            self.footer_h = hud_h + 38 + ov.legend_height(self.legend_w) + 10
+        avail_w, avail_h = w - 24, H - self.cap_h - self.footer_h - 8
         self.scale = min(avail_w / (fd.length + 1.0), avail_h / (fd.width + 1.0))
-        self.cx = w / 2  # panel-local: each panel is drawn into its own image, then pasted at x0
+        self.cx = w / 2  # panel-local: each panel is drawn into its own image, then pasted at (x0, y0)
         pitch_h = (fd.width + 1.0) * self.scale
-        self.cy = HEADER_H + 4 + max(0.0, (avail_h + FOOTER_H - 20 - pitch_h) / 2) + pitch_h / 2  # block centred below the title
+        self.cy = self.cap_h + 4 + max(0.0, (avail_h - pitch_h) / 2) + pitch_h / 2
         self.rect = (int(self.cx - (fd.length / 2 + 0.5) * self.scale), int(self.cy - (fd.width / 2 + 0.5) * self.scale),
                      int((fd.length + 1.0) * self.scale), int((fd.width + 1.0) * self.scale))
         self.static = self._static_layer()
+        self.counters, self.timer, self._fed = ov.RunningCounters(), ov.ReactionTimer(), None
 
-    def px(self, x: float, y: float) -> tuple[int, int]:
+    def px(self, x: float, y: float, z: float = 0.0) -> tuple[int, int]:
         return int(round(self.cx + x * self.scale)), int(round(self.cy - y * self.scale))
 
     def _static_layer(self) -> np.ndarray:
         img = np.full((H, self.w, 3), PAGE_BG, np.uint8)
-        shifted = self
         rx, ry, rw, rh = self.rect
         img[ry:ry + rh, rx:rx + rw] = PITCH_BG
         lw = max(1, int(round(0.07 * self.scale)))
         for (x0, y0), (x1, y1) in field_lines(self.fd, 48):
-            cv2.line(img, shifted.px(x0, y0), shifted.px(x1, y1), PITCH_LINE, lw, cv2.LINE_AA)
+            cv2.line(img, self.px(x0, y0), self.px(x1, y1), PITCH_LINE, lw, cv2.LINE_AA)
         for sx in (-1, 1):  # goals
             gy = self.fd.goal_width / 2
-            cv2.line(img, shifted.px(sx * self.fd.length / 2, -gy), shifted.px(sx * self.fd.length / 2, gy), (235, 235, 235),
+            cv2.line(img, self.px(sx * self.fd.length / 2, -gy), self.px(sx * self.fd.length / 2, gy), (235, 235, 235),
                      lw * 3, cv2.LINE_AA)
-        cv2.putText(img, self.title, (12, 31), FONT, 0.85, (245, 245, 245), 2, cv2.LINE_AA)
+        ov.draw_caption(img, 0, 0, self.w, self.label, self.situation_line)
         return img
+
+    def _feed(self, st: dict) -> None:
+        if st.get("row") is not None and st.get("i") != self._fed:
+            self._fed = st.get("i")
+            self.counters.update(st["row"])
+            self.timer.update(st["row"])
 
     # ---- per frame ------------------------------------------------------------------------------------------
     def draw(self, canvas: np.ndarray, st: dict | None, t: float) -> None:
         img = self.static.copy()
         s = self.scale
-        local = self
         if st is None or not st["covered"]:
             cv2.putText(img, "no trace data at this time", (self.w // 2 - 150, H // 2), FONT, 0.7, (200, 200, 200), 2, cv2.LINE_AA)
-            canvas[:, self.x0:self.x0 + self.w] = img
+            canvas[self.y0:self.y0 + H, self.x0:self.x0 + self.w] = img
             return
-        rx, ry, rw, rh = local.rect
+        self._feed(st)
+        rx, ry, rw, rh = self.rect
         if st["blackout"]:  # red tint over the pitch
             roi = img[ry:ry + rh, rx:rx + rw]
             roi[:] = cv2.addWeighted(roi, 0.72, np.full_like(roi, BLACKOUT_BGR), 0.28, 0)
@@ -137,10 +157,23 @@ class Panel:
                 h = min(max(h, 0.0), 1.0)
                 alpha = 0.12 + 0.78 * h
                 colour = tuple(int(c) for c in (np.array(TEAM[r["team"]], float) * 0.55 + 255 * 0.45) * alpha + base * (1 - alpha))
-                cv2.line(img, local.px(r["x"], r["y"]), local.px(o["x"], o["y"]), colour, 1 + int(round(5 * h)), cv2.LINE_AA)
+                cv2.line(img, self.px(r["x"], r["y"]), self.px(o["x"], o["y"]), colour, 1 + int(round(5 * h)), cv2.LINE_AA)
+        ov.belief_marks(img, self.px, robots, st["ball"], radius=max(5, int(0.3 * s)))
         rr = max(8, int(ROBOT_R_M * s))
+        dup = ov.duplicate_teams(robots)
+        placer = LabelPlacer((rx + 2, ry + 2, rx + rw - 2, ry + rh - 2))
+        bc = self.px(st["ball"]["x"], st["ball"]["y"])
+        br = max(5, int(BALL_R_M * s))
+        placer.reserve((bc[0] - br - 4, bc[1] - br - 4, bc[0] + br + 4, bc[1] + br + 4))
+        for r in robots:
+            c = self.px(r["x"], r["y"])
+            placer.reserve((c[0] - rr - 4, c[1] - rr - 4, c[0] + rr + 4, c[1] + rr + 4))
         for r in sorted(robots, key=lambda q: q["im_lead"] is True):
-            c = local.px(r["x"], r["y"])
+            c = self.px(r["x"], r["y"])
+            chaser = ov.is_chaser(r)
+            if chaser and r["team"] in dup:  # red ring on the ground, outside the lead ring
+                ov.ground_ring(img, self.px, r["x"], r["y"], ROBOT_R_M + 15 / s, (0, 0, 0), 7)
+                ov.ground_ring(img, self.px, r["x"], r["y"], ROBOT_R_M + 15 / s, DUP_RING, 4)
             if r.get("im_lead"):  # white ring with a black outline: visible on both team colours and on the red tint
                 cv2.circle(img, c, rr + 6, (0, 0, 0), 7, cv2.LINE_AA)
                 cv2.circle(img, c, rr + 6, (255, 255, 255), 4, cv2.LINE_AA)
@@ -151,33 +184,46 @@ class Panel:
             cv2.line(img, c, tip, (255, 255, 255), 2, cv2.LINE_AA)
             role = (r.get("player_role") or "?")[0].upper()
             label = f"{r['id']}{role}"
-            (tw, th), _ = cv2.getTextSize(label, FONT, 0.5, 1)
-            cv2.putText(img, label, (c[0] - tw // 2, c[1] + th // 2 - 1), FONT, 0.5, TEAM_TEXT[r["team"]], 1, cv2.LINE_AA)
-        bc = local.px(st["ball"]["x"], st["ball"]["y"])
-        br = max(5, int(BALL_R_M * s))
+            (tw, th), _ = cv2.getTextSize(label, FONT, 0.6, 1)
+            cv2.putText(img, label, (c[0] - tw // 2, c[1] + th // 2 - 1), FONT, 0.6, TEAM_TEXT[r["team"]], 1, cv2.LINE_AA)
+            if chaser:
+                ov.chaser_marker(img, (c[0], c[1] - rr - 19), r["team"])
+        for r in sorted(robots, key=lambda q: not ov.is_chaser(q)):  # decision word and rank; chasers get the best spot
+            text = ov.label_text(r)
+            if not text:
+                continue
+            c = self.px(r["x"], r["y"])
+            tw, th = ov.text_size(text, TEXT_SCALE, 2 if ov.is_chaser(r) else 1)
+            gap = rr + 6 + (10 if r["team"] in dup and ov.is_chaser(r) else 0)
+            cand = []
+            for extra in (0, th + 6, 2 * (th + 6)):  # below, above, right, left; then the same one and two lines further out
+                g = gap + extra
+                cand += [(c[0] - tw // 2, c[1] + g), (c[0] - tw // 2, c[1] - g - th - 22), (c[0] + g, c[1] - th // 2),
+                         (c[0] - g - tw, c[1] - th // 2)]
+            x, y = placer.place(tw, th, cand)
+            ov.put_text(img, text, (x, y + th - 5), TEXT_SCALE, TEAM[r["team"]] if ov.is_chaser(r) else TEXT,
+                        2 if ov.is_chaser(r) else 1)
         cv2.circle(img, bc, br + 2, (0, 0, 0), -1, cv2.LINE_AA)
         cv2.circle(img, bc, br, (255, 255, 255), -1, cv2.LINE_AA)
-        # footer: badge per team, time, legend
-        y = ry + rh + 10
-        teams = sorted({r["team"] for r in robots}, key=lambda tm: tm != "home")
-        bw = (self.w - 36) // max(len(teams), 1)
-        for k, team in enumerate(teams):
-            modes = [r.get("comm_mode") for r in robots if r["team"] == team and r.get("comm_mode")]
-            worst = max(modes, key=lambda m: MODE_RANK.get(m, 3)) if modes else "unknown"
-            n = sum(1 for m in modes if m == worst)
-            text = f"{TEAM_NAME[team]}  comm: {worst}" + (f" ({n}/{len(modes)})" if modes and n != len(modes) else "")
-            x = 12 + k * (bw + 12)
-            cv2.rectangle(img, (x, y), (x + bw, y + 34), MODE_COLOR.get(worst, (120, 120, 120)), -1)
-            cv2.rectangle(img, (x, y), (x + 12, y + 34), TEAM[team], -1)   # team stripe
-            cv2.rectangle(img, (x, y), (x + bw, y + 34), (0, 0, 0), 1)
-            cv2.putText(img, text, (x + 22, y + 24), FONT, 0.6, MODE_TEXT.get(worst, (255, 255, 255)), 1, cv2.LINE_AA)
-        cv2.putText(img, f"t = {t:.1f} s", (12, y + 76), FONT, 1.1, (245, 245, 245), 2, cv2.LINE_AA)
-        cv2.putText(img, "ring = lead   tick = heading   G/D/S = role   link width = health", (12, y + 100), FONT, 0.46,
-                    (190, 190, 190), 1, cv2.LINE_AA)
+        ov.event_marks(img, self.px, self.timer.display(t), (rx, ry, rx + rw, ry + rh), st["ball"])
         if st["blackout"]:
             cv2.rectangle(img, (rx, ry), (rx + rw, ry + 30), (30, 30, 200), -1)
-            cv2.putText(img, "TEAM LINK BLACKOUT", (rx + rw // 2 - 125, ry + 22), FONT, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-        canvas[:, self.x0:self.x0 + self.w] = img
+            ov.put_text(img, "TEAM LINK BLACKOUT", (rx + rw // 2 - 125, ry + 22), 0.7, (255, 255, 255), 2, outline=False)
+        self._footer(img, robots, t, ry + rh + 8)
+        canvas[self.y0:self.y0 + H, self.x0:self.x0 + self.w] = img
+
+    def _footer(self, img: np.ndarray, robots: list[dict], t: float, y: int) -> None:
+        teams = sorted({r["team"] for r in robots}, key=lambda tm: tm != "home")
+        for k, team in enumerate(teams):
+            ov.draw_team_hud(img, 12 + k * (self.block_w + 12), y, self.block_w, team, self.counters.stats(team))
+        hud_h = HUD_ROW * 5
+        if self.wide:
+            x = 12 + 2 * (self.block_w + 12) + 12
+            ov.put_text(img, f"t = {t:.1f} s", (x, y + 32), 1.0, TEXT, 2)
+            ov.draw_legend(img, x, y + 46, self.legend_w)
+        else:
+            ov.put_text(img, f"t = {t:.1f} s", (12, y + hud_h + 30), 1.0, TEXT, 2)
+            ov.draw_legend(img, 12, y + hud_h + 38, self.legend_w)
 
 
 def main(argv=None) -> int:
@@ -189,6 +235,10 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--title-left", default="")
     ap.add_argument("--title-right", default="")
+    ap.add_argument("--situation", default="", help="network situation for the caption (default: profile in the match JSON next to the trace)")
+    ap.add_argument("--seed", default="", help="seed for the caption (default: from the match JSON next to the trace)")
+    ap.add_argument("--layout", choices=("auto", "side", "stacked"), default="auto",
+                    help="two traces: side by side (1280x720) or stacked (1280x1440); auto = side for one trace, stacked for two")
     ap.add_argument("--poster", default="", help="also write this PNG (a frame at --poster-t, default the middle)")
     ap.add_argument("--poster-t", type=float, default=None)
     ap.add_argument("--cpu", action="store_true", help="encode with libx264 instead of NVENC")
@@ -197,19 +247,27 @@ def main(argv=None) -> int:
         raise SystemExit("--t1 must be after --t0")
     traces = [load_trace(a.left)] + ([load_trace(a.right)] if a.right else [])
     titles = [a.title_left or Path(a.left).stem] + ([a.title_right or Path(a.right).stem] if a.right else [])
-    widths = [W] if len(traces) == 1 else [W // 2, W // 2]
-    panels, x = [], 0
-    for w, title in zip(widths, titles):
-        panels.append(Panel(x, w, title))
-        x += w
+    metas = [ov.trace_meta(a.left)] + ([ov.trace_meta(a.right)] if a.right else [])
+    layout = a.layout if a.layout != "auto" else ("stacked" if a.right else "side")
+    stacked = len(traces) == 2 and layout == "stacked"
+    canvas_h = H * 2 if stacked else H
+    panels = []
+    for k, (title, meta) in enumerate(zip(titles, metas)):
+        kw = {"situation": a.situation or meta.get("situation"), "seed": a.seed if a.seed != "" else meta.get("seed")}
+        if len(traces) == 1:
+            panels.append(Panel(0, W, title, **kw))
+        elif stacked:
+            panels.append(Panel(0, W, title, y0=k * H, **kw))
+        else:
+            panels.append(Panel(k * (W // 2), W // 2, title, **kw))
     ffmpeg = find_ffmpeg()
     codec_args, codec = encoder_args(ffmpeg, a.cpu)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    enc = open_encoder(ffmpeg, a.out, codec_args, W, H, FPS)
+    enc = open_encoder(ffmpeg, a.out, codec_args, W, canvas_h, FPS)
     n = int(round((a.t1 - a.t0) * FPS))
     poster_t = a.poster_t if a.poster_t is not None else (a.t0 + a.t1) / 2
     poster_frame = min(max(int(round((poster_t - a.t0) * FPS)), 0), n)
-    canvas = np.full((H, W, 3), PAGE_BG, np.uint8)
+    canvas = np.full((canvas_h, W, 3), PAGE_BG, np.uint8)
     import time
     start = time.perf_counter()
     for k in range(n + 1):
@@ -217,7 +275,7 @@ def main(argv=None) -> int:
         for panel, tr in zip(panels, traces):
             panel.draw(canvas, state_at(tr, t), t)
         if len(panels) == 2:
-            cv2.line(canvas, (W // 2, 0), (W // 2, H), (90, 90, 90), 2)
+            cv2.line(canvas, (0, H), (W, H), (90, 90, 90), 2) if stacked else cv2.line(canvas, (W // 2, 0), (W // 2, H), (90, 90, 90), 2)
         if a.poster and k == poster_frame:
             cv2.imwrite(a.poster, canvas)
         try:

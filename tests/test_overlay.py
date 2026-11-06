@@ -113,3 +113,16 @@ def test_trace_meta(tmp_path):
     (tmp_path / "m_0.json").write_text('{"meta": {"profile": "rcap_bad", "seed": 3, "home_brain": "current", "away_brain": "current"}}')
     assert trace_meta(str(tmp_path / "m_0.trace.jsonl")) == {"situation": "rcap_bad", "seed": 3, "brain": "current"}
     assert trace_meta(str(tmp_path / "none.trace.jsonl")) == {}
+
+
+def test_one_timer_per_team_newest_event():
+    rt = ReactionTimer()
+    rows = _reaction_rows(None)
+    for r in rows:
+        if r["t"] >= 1.0:  # a second teleport at 3 s while the first is still running
+            r["ball"] = {"x": 5.0 if r["t"] < 3.0 else -5.0, "y": 0.0}
+            r["robots"][1]["x"] = 5.0 if r["t"] < 3.0 else -5.0
+    for r in rows[:41]:
+        rt.update(r)
+    home = [x for x in rt.display(4.0)["timers"] if x["team"] == "home"]
+    assert len(home) == 1 and home[0]["elapsed"] <= 1.1

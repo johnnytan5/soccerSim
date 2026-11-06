@@ -150,8 +150,8 @@ class RunningCounters:
 
 class ReactionTimer:
     """Ball events as metrics.py detects them (teleport or kick), the reaction clock of each team's nearest eligible robot, and
-    what to show: a flash at the event, a running timer, and the final time for FINAL_HOLD_S after it stops (reaction, or the
-    8 s timeout). Events excluded by metrics (nearest robot already on the ball) flash but run no timer."""
+    what to show: a flash at the event, a running timer (the newest event of each team), and the final time for FINAL_HOLD_S after it
+    stops (reaction, or the 8 s timeout). Events excluded by metrics (nearest robot already on the ball) flash but run no timer."""
 
     FINAL_HOLD_S = 1.0
     FLASH_S = 0.7
@@ -188,17 +188,22 @@ class ReactionTimer:
 
     def display(self, t: float) -> dict:
         """{'flashes': [{team, ball, age}], 'timers': [{team, robot, elapsed, running, censored}]} at time t."""
-        flashes, timers = [], []
+        flashes, latest = [], {}
         for r in self.records:
             age = t - r["t0"]
             if 0.0 <= age <= self.FLASH_S:
                 flashes.append({"team": r["team"], "ball": r["ball"], "age": age / self.FLASH_S})
-            if r["excluded"]:
+            if r["excluded"] or r["t0"] > t:
                 continue
+            if r["end"] is None or t - r["end"] <= self.FINAL_HOLD_S:  # running, or stopped less than FINAL_HOLD_S ago
+                if r["team"] not in latest or r["t0"] >= latest[r["team"]]["t0"]:
+                    latest[r["team"]] = r
+        timers = []
+        for r in latest.values():  # one timer per team: the newest event (older ones still count in metrics, they are just not drawn)
             if r["end"] is None:
                 timers.append({"team": r["team"], "robot": r["robot"], "elapsed": max(t - r["t0"], 0.0), "running": True,
                                "censored": False})
-            elif t - r["end"] <= self.FINAL_HOLD_S:
+            else:
                 done = r["reaction_s"]
                 timers.append({"team": r["team"], "robot": r["robot"], "elapsed": done if done is not None else REACTION_TIMEOUT_S,
                                "running": False, "censored": done is None})
@@ -309,8 +314,11 @@ def draw_team_hud(img, x: int, y: int, w: int, team: str, st: dict, scale: float
     cv2.rectangle(img, (x, y), (x + w, y + line), MODE_COLOR.get(mode, (120, 120, 120)), -1)
     cv2.rectangle(img, (x, y), (x + 12, y + line), TEAM[team], -1)
     cv2.rectangle(img, (x, y), (x + w, y + line), (0, 0, 0), 1)
-    cv2.putText(img, f"{TEAM_NAME[team]}  worst: {mode}", (x + 20, y + line - int(9 * scale / 0.72)), FONT, scale,
-                MODE_TEXT.get(mode, (255, 255, 255)), 1, cv2.LINE_AA)
+    head = f"{TEAM_NAME[team]}  " + ("comm: n/a" if mode == "unknown" else f"worst: {mode}")
+    hs = scale
+    while hs > 0.45 and text_size(head, hs)[0] > w - 28:
+        hs -= 0.02
+    cv2.putText(img, head, (x + 20, y + line - int(9 * scale / 0.72)), FONT, hs, MODE_TEXT.get(mode, (255, 255, 255)), 1, cv2.LINE_AA)
     rows = hud_lines(st)
     for k, (name, val) in enumerate(rows):
         base = y + line * (k + 2) - int(7 * scale / 0.72)
