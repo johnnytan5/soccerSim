@@ -87,7 +87,7 @@ class Panel:
         self.label, self.situation_line = ov.caption_text(title, situation, seed)
         self.cap_h = ov.caption_height(w, self.label, self.situation_line)
         self.wide = w >= 1000
-        self.block_w = 340 if self.wide else (w - 36) // 2
+        self.block_w = 310 if self.wide else (w - 36) // 2
         hud_h = HUD_ROW * 5
         if self.wide:   # HUD blocks on the left of the footer, time and legend on the right
             self.legend_w = w - 2 * self.block_w - 24 - 36

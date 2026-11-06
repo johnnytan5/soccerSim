@@ -350,7 +350,7 @@ def draw_legend(img, x: int, y: int, max_w: int, scale: float = 0.6) -> int:
         elif icon == "flash":
             cv2.circle(img, ic, 9, FLASH, 3, cv2.LINE_AA)
         cv2.putText(img, word, (cx + 28, cy + row_h // 2 + int(7 * scale / 0.6)), FONT, scale, TEXT, 1, cv2.LINE_AA)
-        cx += 28 + w + 16
+        cx += 28 + w + 12
     return cy - y + row_h
 
 
