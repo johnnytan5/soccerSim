@@ -23,18 +23,53 @@ Options added later: `--trace`, `--record A:B`, `--parallel K`, `--yolo` (GPU), 
 `fused_ball` and `own_ball` (`x, y, valid`, world frame). Fields the brain does not publish are `null`. About 2 MB per 60 s of 5v5.
 
 `scripts/render_replay.py --left a.trace.jsonl [--right b.trace.jsonl] --t0 15 --t1 40 --out clip.mp4 --title-left "new" --title-right
-"baseline" [--poster clip.png]` renders a top-down replay (pitch to scale, team-coloured robots with id + role initial and a
-heading tick, white ring = `im_lead`, link lines whose width/opacity follow the health, comm-mode badge per team, red tint and
-banner in a blackout, PLAY time) at 1280x720, 25 fps, numpy + cv2 (~6 ms per frame for two panels), piped to ffmpeg
+"baseline" [--situation rcap_bad] [--seed 1] [--layout side|stacked] [--poster clip.png]` renders a top-down replay (pitch to scale,
+team-coloured robots with id + role initial and a heading tick, white ring = `im_lead`, link lines whose width/opacity follow the
+health, red tint and banner in a blackout, PLAY time), 25 fps, numpy + cv2 (~14 ms per frame for two panels), piped to ffmpeg
 `h264_nvenc -preset p5 -cq 28` (libx264 if NVENC is missing, or `--cpu`). Colours are Okabe-Ito (home blue, away orange; comm
-mode green / yellow / vermillion). A 20 s two-panel clip is about 1 MB.
+mode green / yellow / vermillion). A 20 s two-panel clip is about 2.5 MB.
+
+Status overlays (`soccer_sim/overlay.py`, shared with the 3D clip so both say the same thing; every number comes from
+`soccer_sim/metrics.py`, whose `chasing()`, keeper rule and ball-event / reaction rules the helpers feed a private
+`MetricsRecorder`, nothing is re-derived):
+
+- per robot: the decision word under it (CHASE, ASSIST, FIND, KICK, V-KICK for auto_visual_kick, ...) and the outfield rank (`#1`);
+  a filled triangle above every chaser (decision in `CHASE_DECISIONS`); a red ring on the ground around every chaser of a team with
+  two or more chasers (the `duplicate_decision` rule: keeper included).
+- each robot's `fused_ball` as a small hollow dot in the team colour, joined to the true ball by a thin line (its length is the
+  error).
+- a ball event (teleport or kick, as metrics detects it) flashes a ring at the ball; the reaction timer runs next to the ball (the
+  newest event of each team; reaction = the nearest eligible robot faces the ball within 30 degrees or enters the chase family, as
+  in metrics) and its final time stays ~1 s; at the 8 s timeout it shows `>8 s`. Events metrics excludes (nearest robot already
+  on the ball) flash without a timer.
+- a HUD per team, counted from the clip start (`RunningCounters`): chase flips, seconds with two or more chasers, seconds with no
+  chaser, mean fused-ball error (valid estimates only), and the worst comm mode seen (`n/a` when the brain publishes none).
+- a caption: brain label (`--title-*`), `network: <situation>` and `seed <n>` (`--situation` / `--seed`; default the `profile` and
+  `seed` of the match JSON next to `<stem>.trace.jsonl`), and a one-line icon legend.
+
+Text is 0.72 scale HERSHEY_SIMPLEX (about 16 px cap height) with a dark outline; the decision labels are placed greedily so they
+avoid the discs and each other (still crowded when five robots stand on the ball). Layout: `--layout side` puts two traces left /
+right (1280x720, 640 px panels, HUD blocks and the legend wrapped to two rows; it fits, but the pitch is only 25 px/m and labels
+collide more); `stacked` puts them one above the other (1280x1440, full-width panels, 34 px/m, HUD, time and the legend on one
+line). `auto` (default) is `stacked` for two traces, `side` for one, because the stacked panels are the legible ones.
+
+`scripts/pick_clip_windows.py --new new.trace.jsonl --old old.trace.jsonl --finding flips|dup|ball|reaction|blackout [--length 22]
+[--step 1.0] [--team both] [--out w.json]` picks the clip window for a finding from a new-brain and a pre-change trace of the same
+situation and seed, and writes `{finding, t0, t1, score_new, score_old}` (deterministic; ties go to the lower score_new, then the
+earlier start). `flips` maximises the pre-change chase flips in the window, `dup` the pre-change seconds with 2+ chasers, `ball`
+the pre-change minus new mean fused-ball error, `reaction` the number of ball events with a reaction in both brains (the smaller
+of the two counts; scores are the counts), `blackout` is fixed, from 5 s before the first blackout row to 5 s after the last one
+(scores: seconds with 2+ chasers). All of them use the same counters as the HUD, over the window alone; scores sum both teams
+unless `--team` says one. Feed `t0`/`t1` to `render_replay --t0 --t1`.
 
 ## MuJoCo 3D clip (`--record A:B`)
 
 `--record 20:40` renders PLAY seconds 20-40 of the first match of each profile (`--record-matches 0,2` or `all` for others) to
 `<stem>.mp4` (and implies `--trace`). `match_node --record out.mp4 --record-window 20:40`. A free camera above the pitch at an
-oblique angle (azimuth 90, elevation -46, 18.5 m), the stripped viewer model (cheap team-coloured bodies), 720p, 25 fps, a label
-per robot (H2 striker LEAD), a legend with the clock, comm mode per team and a blackout banner, h264_nvenc.
+oblique angle (azimuth 90, elevation -46, 18.5 m), the stripped viewer model (cheap team-coloured bodies), 720p, 25 fps, the same status overlays as the replay (see above: label per robot with decision word and rank, LEAD, chaser triangle,
+duplicate ring on the ground, belief dots, event flash and reaction timer, per-team HUD, caption from the match meta: brains,
+profile, seed, legend with the clock) and a blackout banner, h264_nvenc. `ClipRecorder.offer(qpos, info)` queues the trace row
+as `info` (non-blocking, as before).
 
 The sim does not render. `soccer_sim_bridge/clip_recorder.py` runs the renderer as a second process; the sim only queues the pose
 (25 Hz, a pickle, ~3 KB, never blocks) and the process renders when the match is over, so the match keeps its tick rate and no frame
