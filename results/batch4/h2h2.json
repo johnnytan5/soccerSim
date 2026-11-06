@@ -1,0 +1,49 @@
+{
+ "perspective": "home",
+ "rows": [
+  {
+   "profile": "good",
+   "own_brain": "current",
+   "opp_brain": "current",
+   "own_network": "good",
+   "opp_network": "blackout",
+   "n": 3,
+   "goal_diff_mean": -0.3333333333333333,
+   "goal_diff_ci_lo": -1.7675509099164854,
+   "goal_diff_ci_hi": 1.100884243249819,
+   "goals_for_mean": 0.0,
+   "goals_for_ci_lo": 0.0,
+   "goals_for_ci_hi": 0.0,
+   "goals_against_mean": 0.3333333333333333,
+   "goals_against_ci_lo": -1.100884243249819,
+   "goals_against_ci_hi": 1.7675509099164854,
+   "wins": 0,
+   "draws": 2,
+   "losses": 1,
+   "p_sign": 1.0,
+   "p_wilcoxon": 1.0
+  },
+  {
+   "profile": "good",
+   "own_brain": "current",
+   "opp_brain": "current",
+   "own_network": "blackout",
+   "opp_network": "good",
+   "n": 3,
+   "goal_diff_mean": -0.3333333333333333,
+   "goal_diff_ci_lo": -1.7675509099164854,
+   "goal_diff_ci_hi": 1.100884243249819,
+   "goals_for_mean": 0.0,
+   "goals_for_ci_lo": 0.0,
+   "goals_for_ci_hi": 0.0,
+   "goals_against_mean": 0.3333333333333333,
+   "goals_against_ci_lo": -1.100884243249819,
+   "goals_against_ci_hi": 1.7675509099164854,
+   "wins": 0,
+   "draws": 2,
+   "losses": 1,
+   "p_sign": 1.0,
+   "p_wilcoxon": 1.0
+  }
+ ]
+}
