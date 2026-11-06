@@ -44,14 +44,13 @@ Status overlays (`soccer_sim/overlay.py`, shared with the 3D clip so both say th
   on the ball) flash without a timer.
 - a HUD per team, counted from the clip start (`RunningCounters`): chase flips, seconds with two or more chasers, seconds with no
   chaser, mean fused-ball error (valid estimates only), and the worst comm mode seen (`n/a` when the brain publishes none).
-- a caption: brain label (`--title-*`), `network: <situation>` and `seed <n>` (`--situation` / `--seed`; default the `profile` and
+- a caption: brain label (`--title-*`), `Network: <name>` (good = Clean, rcap_bad = Congested, terrible = Severe, blackout* = Blackout, else the raw id) and `seed <n>` (`--situation` / `--seed`; default the `profile` and
   `seed` of the match JSON next to `<stem>.trace.jsonl`), and a one-line icon legend.
 
-Text is 0.72 scale HERSHEY_SIMPLEX (about 16 px cap height) with a dark outline; the decision labels are placed greedily so they
+Link lines are thin and faint (width and opacity still follow health) and drawn first. Non-chaser decision words are smaller (0.55) than the chaser's. Text is 0.72 scale HERSHEY_SIMPLEX (about 16 px cap height) with a dark outline; the decision labels are placed greedily so they
 avoid the discs and each other (still crowded when five robots stand on the ball). Layout: `--layout side` puts two traces left /
 right (1280x720, 640 px panels, HUD blocks and the legend wrapped to two rows; it fits, but the pitch is only 25 px/m and labels
-collide more); `stacked` puts them one above the other (1280x1440, full-width panels, 34 px/m, HUD, time and the legend on one
-line). `auto` (default) is `stacked` for two traces, `side` for one, because the stacked panels are the legible ones.
+collide more); `stacked` puts them one above the other (1280x1440, full-width panels, 42 px/m, the HUD, time and legend in a 300 px right-hand column). `auto` (default) is `stacked` for two traces, `side` for one, because the stacked panels are the legible ones.
 
 `scripts/pick_clip_windows.py --new new.trace.jsonl --old old.trace.jsonl --finding flips|dup|ball|reaction|blackout [--length 22]
 [--step 1.0] [--team both] [--out w.json]` picks the clip window for a finding from a new-brain and a pre-change trace of the same

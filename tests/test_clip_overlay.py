@@ -61,7 +61,7 @@ def test_draw_overlay_marks_chasers_duplicates_and_counts():
     st = state.counters.stats("home")
     assert st["dup_s"] > 0.9 and st["chase_flips"] == 0 and st["worst_mode"] == "degraded"
     assert abs(st["fused_err_m"] - 0.5) < 1e-6
-    assert state.label == "new brain" and "rcap_bad" in state.situation_line
+    assert state.label == "new brain" and "Network: Congested" in state.situation_line
     assert imgs[0].shape == (H, W, 3) and (imgs[0] != 80).any()
 
 

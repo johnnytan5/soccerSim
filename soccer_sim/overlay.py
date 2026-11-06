@@ -110,11 +110,22 @@ def trace_meta(trace_path: str) -> dict:
             "brain": "-vs-".join(sorted(brains)) if brains else meta.get("brain")}
 
 
+SITUATION_NAME = {"good": "Clean", "rcap_bad": "Congested", "terrible": "Severe"}
+
+
+def situation_name(situation: str | None) -> str:
+    """Readable network situation as the PhD site names it; blackout:* (and blackout30@30) -> Blackout; else the raw id."""
+    sit = situation or ""
+    if sit.startswith("blackout"):
+        return "Blackout"
+    return SITUATION_NAME.get(sit, sit)
+
+
 def caption_text(label: str, situation: str | None, seed) -> tuple[str, str]:
-    """(brain label, 'network: <situation>   seed <n>')."""
+    """(brain label, 'Network: <name>   seed <n>')."""
     parts = []
     if situation:
-        parts.append(f"network: {situation}")
+        parts.append(f"Network: {situation_name(situation)}")
     if seed not in (None, ""):
         parts.append(f"seed {seed}")
     return label, "   ".join(parts)

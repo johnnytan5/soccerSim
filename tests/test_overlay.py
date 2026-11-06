@@ -136,3 +136,10 @@ def test_instant_reaction_is_still_shown():
         rt.update(r)
     home = [x for x in rt.display(1.2)["timers"] if x["team"] == "home"]
     assert home and not home[0]["running"] and home[0]["elapsed"] == 0.0
+
+
+def test_situation_names():
+    from soccer_sim.overlay import caption_text, situation_name
+    assert [situation_name(s) for s in ("good", "rcap_bad", "terrible", "blackout:30@30", "blackout30@30", "blackout", "weird", None)] == [
+        "Clean", "Congested", "Severe", "Blackout", "Blackout", "Blackout", "weird", ""]
+    assert caption_text("x", "rcap_bad", 1)[1] == "Network: Congested   seed 1"

@@ -44,6 +44,7 @@ PITCH_BG = (58, 74, 46)     # dark desaturated green, neutral for all colour vis
 PITCH_LINE = (200, 200, 200)
 ROBOT_R_M, BALL_R_M, TICK_M = 0.5, 0.25, 0.95  # drawn larger than the real T2 so the label stays readable
 HUD_ROW = ov.HUD_ROW
+NONCHASER_SCALE = 0.55   # decision words of non-chasers, smaller than the chaser's (TEXT_SCALE)
 
 
 def load_trace(path: str) -> dict:
@@ -87,17 +88,19 @@ class Panel:
         self.label, self.situation_line = ov.caption_text(title, situation, seed)
         self.cap_h = ov.caption_height(w, self.label, self.situation_line)
         self.wide = w >= 1000
-        self.block_w = 310 if self.wide else (w - 36) // 2
+        self.col_w = 300 if self.wide else 0      # wide panels: HUD, time and legend in a right-hand column
+        self.block_w = (w - 36) // 2
         hud_h = HUD_ROW * 5
-        if self.wide:   # HUD blocks on the left of the footer, time and legend on the right
-            self.legend_w = w - 2 * self.block_w - 24 - 36
-            self.footer_h = max(hud_h, 46 + ov.legend_height(self.legend_w)) + 10
-        else:           # HUD blocks, then time, then the legend (wrapped), all full width
+        if self.wide:
+            self.legend_w = self.col_w - 20
+            self.footer_h = 0
+            avail_w, avail_h = w - self.col_w - 16, H - self.cap_h - 8
+        else:           # HUD blocks, then time, then the legend (wrapped), all full width below the pitch
             self.legend_w = w - 24
             self.footer_h = hud_h + 38 + ov.legend_height(self.legend_w) + 10
-        avail_w, avail_h = w - 24, H - self.cap_h - self.footer_h - 8
+            avail_w, avail_h = w - 24, H - self.cap_h - self.footer_h - 8
         self.scale = min(avail_w / (fd.length + 1.0), avail_h / (fd.width + 1.0))
-        self.cx = w / 2  # panel-local: each panel is drawn into its own image, then pasted at (x0, y0)
+        self.cx = (w - self.col_w) / 2  # panel-local: each panel is drawn into its own image, then pasted at (x0, y0)
         pitch_h = (fd.width + 1.0) * self.scale
         self.cy = self.cap_h + 4 + max(0.0, (avail_h - pitch_h) / 2) + pitch_h / 2
         self.rect = (int(self.cx - (fd.length / 2 + 0.5) * self.scale), int(self.cy - (fd.width / 2 + 0.5) * self.scale),
@@ -155,9 +158,9 @@ class Panel:
                 back = next((q for q in o.get("links") or [] if q.get("player") == r["id"]), None)
                 h = min(float(l.get("health") or 0.0), float(back.get("health") or 0.0) if back else float(l.get("health") or 0.0))
                 h = min(max(h, 0.0), 1.0)
-                alpha = 0.12 + 0.78 * h
+                alpha = 0.06 + 0.34 * h
                 colour = tuple(int(c) for c in (np.array(TEAM[r["team"]], float) * 0.55 + 255 * 0.45) * alpha + base * (1 - alpha))
-                cv2.line(img, self.px(r["x"], r["y"]), self.px(o["x"], o["y"]), colour, 1 + int(round(5 * h)), cv2.LINE_AA)
+                cv2.line(img, self.px(r["x"], r["y"]), self.px(o["x"], o["y"]), colour, 1 + int(round(2 * h)), cv2.LINE_AA)
         ov.belief_marks(img, self.px, robots, st["ball"], radius=max(5, int(0.3 * s)))
         rr = max(8, int(ROBOT_R_M * s))
         dup = ov.duplicate_teams(robots)
@@ -193,7 +196,8 @@ class Panel:
             if not text:
                 continue
             c = self.px(r["x"], r["y"])
-            tw, th = ov.text_size(text, TEXT_SCALE, 2 if ov.is_chaser(r) else 1)
+            ls = TEXT_SCALE if ov.is_chaser(r) else NONCHASER_SCALE
+            tw, th = ov.text_size(text, ls, 2 if ov.is_chaser(r) else 1)
             gap = rr + 6 + (10 if r["team"] in dup and ov.is_chaser(r) else 0)
             cand = []
             for extra in (0, th + 6, 2 * (th + 6)):  # below, above, right, left; then the same one and two lines further out
@@ -201,7 +205,7 @@ class Panel:
                 cand += [(c[0] - tw // 2, c[1] + g), (c[0] - tw // 2, c[1] - g - th - 22), (c[0] + g, c[1] - th // 2),
                          (c[0] - g - tw, c[1] - th // 2)]
             x, y = placer.place(tw, th, cand)
-            ov.put_text(img, text, (x, y + th - 5), TEXT_SCALE, TEAM[r["team"]] if ov.is_chaser(r) else TEXT,
+            ov.put_text(img, text, (x, y + th - 5), ls, TEAM[r["team"]] if ov.is_chaser(r) else TEXT,
                         2 if ov.is_chaser(r) else 1)
         cv2.circle(img, bc, br + 2, (0, 0, 0), -1, cv2.LINE_AA)
         cv2.circle(img, bc, br, (255, 255, 255), -1, cv2.LINE_AA)
@@ -214,16 +218,20 @@ class Panel:
 
     def _footer(self, img: np.ndarray, robots: list[dict], t: float, y: int) -> None:
         teams = sorted({r["team"] for r in robots}, key=lambda tm: tm != "home")
-        for k, team in enumerate(teams):
-            ov.draw_team_hud(img, 12 + k * (self.block_w + 12), y, self.block_w, team, self.counters.stats(team))
         hud_h = HUD_ROW * 5
         if self.wide:
-            x = 12 + 2 * (self.block_w + 12) + 12
-            ov.put_text(img, f"t = {t:.1f} s", (x, y + 32), 1.0, TEXT, 2)
-            ov.draw_legend(img, x, y + 46, self.legend_w)
-        else:
-            ov.put_text(img, f"t = {t:.1f} s", (12, y + hud_h + 30), 1.0, TEXT, 2)
-            ov.draw_legend(img, 12, y + hud_h + 38, self.legend_w)
+            x, bw = self.w - self.col_w + 6, self.col_w - 14
+            y = self.cap_h + 8
+            for k, team in enumerate(teams):
+                ov.draw_team_hud(img, x, y + k * (hud_h + 10), bw, team, self.counters.stats(team))
+            y += len(teams) * (hud_h + 10)
+            ov.put_text(img, f"t = {t:.1f} s", (x + 4, y + 30), 1.0, TEXT, 2)
+            ov.draw_legend(img, x, y + 44, self.legend_w)
+            return
+        for k, team in enumerate(teams):
+            ov.draw_team_hud(img, 12 + k * (self.block_w + 12), y, self.block_w, team, self.counters.stats(team))
+        ov.put_text(img, f"t = {t:.1f} s", (12, y + hud_h + 30), 1.0, TEXT, 2)
+        ov.draw_legend(img, 12, y + hud_h + 38, self.legend_w)
 
 
 def main(argv=None) -> int:
