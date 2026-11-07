@@ -1,0 +1,1041 @@
+{
+ "meta": {
+  "generated": "2026-11-07T04:39:35Z",
+  "brains": {
+   "new": "919c628",
+   "pre": "8d241a2"
+  },
+  "n_matches": 12,
+  "unit": "match",
+  "n": 12,
+  "duration_s": 120.02,
+  "profiles": [
+   "rcap_bad",
+   "blackout:30@30"
+  ],
+  "notes": "One value per match (mean of the home and away team values), n = matches. CI: Student t 95%. p_mwu: Mann-Whitney U two-sided on the per-match values. goals = mean goals per team per match. blackout:30@30/bo_duplicate_striker_frac: different signals (new=im_lead, pre=decision); blackout:30@30/bo_role_flips_per_min: different signals (new=player_role, pre=decision); blackout:30@30/duplicate_striker_frac: different signals (new=im_lead, pre=decision); blackout:30@30/out_duplicate_striker_frac: different signals (new=im_lead, pre=decision); blackout:30@30/out_role_flips_per_min: different signals (new=player_role, pre=decision); blackout:30@30/role_flips_per_min: different signals (new=player_role, pre=decision); rcap_bad/duplicate_striker_frac: different signals (new=im_lead, pre=decision); rcap_bad/role_flips_per_min: different signals (new=player_role, pre=decision)"
+ },
+ "rows": [
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "n": 3,
+   "mean": 16.24983333333333,
+   "ci_lo": -15.374871565146762,
+   "ci_hi": 47.874538231813425,
+   "median": 20.25
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "n": 3,
+   "mean": 26.6635,
+   "ci_lo": -36.803833851905395,
+   "ci_hi": 90.1308338519054,
+   "median": 28.4905
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "n": 3,
+   "mean": 19.666,
+   "ci_lo": -8.264996214572417,
+   "ci_hi": 47.596996214572414,
+   "median": 25.0,
+   "signal": "player_role"
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "n": 3,
+   "mean": 26.6635,
+   "ci_lo": -36.803833851905395,
+   "ci_hi": 90.1308338519054,
+   "median": 28.4905,
+   "signal": "decision"
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "n": 3,
+   "mean": 4.916333333333333,
+   "ci_lo": -2.9483267435775504,
+   "ci_hi": 12.780993410244218,
+   "median": 3.75
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "n": 3,
+   "mean": 59.163999999999994,
+   "ci_lo": -19.99503465160712,
+   "ci_hi": 138.32303465160712,
+   "median": 68.25
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "n": 3,
+   "mean": 81.90566666666668,
+   "ci_lo": -89.21336121455447,
+   "ci_hi": 253.0246945478878,
+   "median": 98.46700000000001
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "n": 3,
+   "mean": 0.14461666666666667,
+   "ci_lo": -0.16360880340169098,
+   "ci_hi": 0.4528421367350243,
+   "median": 0.21515
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "n": 3,
+   "mean": 0.16381666666666667,
+   "ci_lo": -0.18920544350584761,
+   "ci_hi": 0.5168387768391809,
+   "median": 0.23745
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "n": 3,
+   "mean": 0.012616666666666667,
+   "ci_lo": -0.02576634258039985,
+   "ci_hi": 0.05099967591373318,
+   "median": 0.008
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "n": 3,
+   "mean": 0.012616666666666667,
+   "ci_lo": -0.02576634258039985,
+   "ci_hi": 0.05099967591373318,
+   "median": 0.008,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "n": 3,
+   "mean": 0.16381666666666667,
+   "ci_lo": -0.18920544350584761,
+   "ci_hi": 0.5168387768391809,
+   "median": 0.23745,
+   "signal": "decision"
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "n": 3,
+   "mean": 0.4915666666666667,
+   "ci_lo": -0.4423753364497912,
+   "ci_hi": 1.4255086697831247,
+   "median": 0.7025
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "n": 3,
+   "mean": 0.42053333333333337,
+   "ci_lo": -0.48866475407721227,
+   "ci_hi": 1.329731420743879,
+   "median": 0.585
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "n": 2,
+   "mean": 1.23,
+   "ci_lo": 0.8488138579147599,
+   "ci_hi": 1.61118614208524,
+   "median": 1.23
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "n": 2,
+   "mean": 1.555,
+   "ci_lo": -13.12066647028173,
+   "ci_hi": 16.23066647028173,
+   "median": 1.555
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "n": 2,
+   "mean": 4.705,
+   "ci_lo": 2.786363084837629,
+   "ci_hi": 6.623636915162371,
+   "median": 4.705
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "n": 2,
+   "mean": 4.994,
+   "ci_lo": -10.100971226575497,
+   "ci_hi": 20.088971226575495,
+   "median": 4.994
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "reaction_censored",
+   "n": 3,
+   "mean": 3.6666666666666665,
+   "ci_lo": -8.072910149286425,
+   "ci_hi": 15.406243482619757,
+   "median": 2.0
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "n": 3,
+   "mean": 2.5,
+   "ci_lo": -5.2567175188133834,
+   "ci_hi": 10.256717518813383,
+   "median": 1.5
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "n": 3,
+   "mean": 0.9391999999999999,
+   "ci_lo": -0.810819608791237,
+   "ci_hi": 2.689219608791237,
+   "median": 0.9414499999999999
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "n": 3,
+   "mean": 2.7650333333333332,
+   "ci_lo": -7.1884399929386955,
+   "ci_hi": 12.718506659605362,
+   "median": 0.4892
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "n": 3,
+   "mean": 1.50485,
+   "ci_lo": -1.731110087990632,
+   "ci_hi": 4.740810087990632,
+   "median": 1.46535
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "n": 3,
+   "mean": 2.47565,
+   "ci_lo": -5.001275626141131,
+   "ci_hi": 9.95257562614113,
+   "median": 1.0874
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "mode_healthy",
+   "n": 3,
+   "mean": 0.03836666666666667,
+   "ci_lo": -0.04327235019459918,
+   "ci_hi": 0.1200056835279325,
+   "median": 0.025849999999999998
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "mode_degraded",
+   "n": 3,
+   "mean": 0.9615833333333335,
+   "ci_lo": 0.8800383833952848,
+   "ci_hi": 1.043128283271382,
+   "median": 0.9740500000000001
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "new",
+   "metric": "goals",
+   "n": 3,
+   "mean": 0.5,
+   "ci_lo": -0.7420688558751631,
+   "ci_hi": 1.7420688558751631,
+   "median": 0.5
+  },
+  {
+   "profile": "rcap_bad",
+   "brain": "pre",
+   "metric": "goals",
+   "n": 3,
+   "mean": 0.5,
+   "ci_lo": -0.7420688558751631,
+   "ci_hi": 1.7420688558751631,
+   "median": 0.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "chase_flips_per_min",
+   "n": 3,
+   "mean": 11.995833333333332,
+   "ci_lo": -9.483036686636437,
+   "ci_hi": 33.4747033533031,
+   "median": 12.7455
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "chase_flips_per_min",
+   "n": 3,
+   "mean": 24.166666666666668,
+   "ci_lo": 13.226350077759077,
+   "ci_hi": 35.10698325557426,
+   "median": 21.75
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "role_flips_per_min",
+   "n": 3,
+   "mean": 12.9125,
+   "ci_lo": -10.762655654593464,
+   "ci_hi": 36.58765565459346,
+   "median": 10.247,
+   "signal": "player_role"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "role_flips_per_min",
+   "n": 3,
+   "mean": 24.166666666666668,
+   "ci_lo": 13.226350077759077,
+   "ci_hi": 35.10698325557426,
+   "median": 21.75,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "lead_changes_per_min",
+   "n": 3,
+   "mean": 3.332333333333333,
+   "ci_lo": -4.126219027677289,
+   "ci_hi": 10.790885694343956,
+   "median": 3.4989999999999997
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "decision_flips_per_min",
+   "n": 3,
+   "mean": 40.236666666666665,
+   "ci_lo": -24.80251456633067,
+   "ci_hi": 105.275847899664,
+   "median": 46.485
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "decision_flips_per_min",
+   "n": 3,
+   "mean": 92.91666666666667,
+   "ci_lo": 72.75136862735559,
+   "ci_hi": 113.08196470597775,
+   "median": 89.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "duplicate_decision_frac",
+   "n": 3,
+   "mean": 0.15906666666666666,
+   "ci_lo": -0.15747833602993785,
+   "ci_hi": 0.47561166936327115,
+   "median": 0.2036
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "duplicate_decision_frac",
+   "n": 3,
+   "mean": 0.32805,
+   "ci_lo": 0.14644989092683755,
+   "ci_hi": 0.5096501090731624,
+   "median": 0.33435000000000004
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "duplicate_lead_frac",
+   "n": 3,
+   "mean": 0.029433333333333336,
+   "ci_lo": -0.04125613605653451,
+   "ci_hi": 0.10012280272320119,
+   "median": 0.0315
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "duplicate_striker_frac",
+   "n": 3,
+   "mean": 0.029433333333333336,
+   "ci_lo": -0.04125613605653451,
+   "ci_hi": 0.10012280272320119,
+   "median": 0.0315,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "duplicate_striker_frac",
+   "n": 3,
+   "mean": 0.32805,
+   "ci_lo": 0.14644989092683755,
+   "ci_hi": 0.5096501090731624,
+   "median": 0.33435000000000004,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "chaser_present_frac",
+   "n": 3,
+   "mean": 0.4602333333333333,
+   "ci_lo": -0.431932589808742,
+   "ci_hi": 1.3523992564754086,
+   "median": 0.6453
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "chaser_present_frac",
+   "n": 3,
+   "mean": 0.7222333333333334,
+   "ci_lo": 0.553865169212385,
+   "ci_hi": 0.8906014974542817,
+   "median": 0.7595000000000001
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "reaction_median_s",
+   "n": 2,
+   "mean": 1.275,
+   "ci_lo": -12.892418280834743,
+   "ci_hi": 15.442418280834744,
+   "median": 1.275
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "reaction_median_s",
+   "n": 3,
+   "mean": 2.0733333333333337,
+   "ci_lo": 1.489516927738566,
+   "ci_hi": 2.6571497389281014,
+   "median": 2.0700000000000003
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "reaction_p90_s",
+   "n": 2,
+   "mean": 4.998,
+   "ci_lo": -2.600310432232443,
+   "ci_hi": 12.596310432232443,
+   "median": 4.998
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "reaction_p90_s",
+   "n": 3,
+   "mean": 5.639333333333333,
+   "ci_lo": 3.9931739111312075,
+   "ci_hi": 7.285492755535459,
+   "median": 5.73
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "reaction_censored",
+   "n": 3,
+   "mean": 2.6666666666666665,
+   "ci_lo": -3.0702036396659422,
+   "ci_hi": 8.403536972999275,
+   "median": 4.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "reaction_censored",
+   "n": 3,
+   "mean": 5.5,
+   "ci_lo": 0.08594737632097793,
+   "ci_hi": 10.914052623679023,
+   "median": 4.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "fused_ball_err_m",
+   "n": 3,
+   "mean": 3.0530500000000003,
+   "ci_lo": -4.587636178109282,
+   "ci_hi": 10.693736178109281,
+   "median": 2.2386
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "fused_ball_err_m",
+   "n": 3,
+   "mean": 1.6521333333333335,
+   "ci_lo": -2.8730494373879747,
+   "ci_hi": 6.177316104054642,
+   "median": 0.7618
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "local_ball_err_m",
+   "n": 3,
+   "mean": 3.455033333333333,
+   "ci_lo": -5.417002674685236,
+   "ci_hi": 12.327069341351901,
+   "median": 2.5681
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "local_ball_err_m",
+   "n": 3,
+   "mean": 1.6642000000000001,
+   "ci_lo": -1.4127653891914371,
+   "ci_hi": 4.741165389191437,
+   "median": 1.2573500000000002
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "mode_healthy",
+   "n": 3,
+   "mean": 0.7829333333333333,
+   "ci_lo": 0.6916668496721008,
+   "ci_hi": 0.8741998169945657,
+   "median": 0.78545
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "mode_degraded",
+   "n": 3,
+   "mean": 0.018183333333333333,
+   "ci_lo": 0.006279327447693174,
+   "ci_hi": 0.03008733921897349,
+   "median": 0.02095
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "mode_isolated",
+   "n": 3,
+   "mean": 0.19883333333333333,
+   "ci_lo": 0.10742707914444714,
+   "ci_hi": 0.2902395875222195,
+   "median": 0.2019
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "goals",
+   "n": 3,
+   "mean": 0.3333333333333333,
+   "ci_lo": -0.3837754549582428,
+   "ci_hi": 1.0504421216249094,
+   "median": 0.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "goals",
+   "n": 3,
+   "mean": 0.16666666666666666,
+   "ci_lo": -0.5504421216249095,
+   "ci_hi": 0.8837754549582427,
+   "median": 0.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_role_flips_per_min",
+   "n": 3,
+   "mean": 9.279,
+   "ci_lo": 0.08739917242355588,
+   "ci_hi": 18.470600827576444,
+   "median": 11.402,
+   "signal": "player_role"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_role_flips_per_min",
+   "n": 3,
+   "mean": 18.4165,
+   "ci_lo": -6.087725770838038,
+   "ci_hi": 42.92072577083803,
+   "median": 23.936,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_lead_changes_per_min",
+   "n": 3,
+   "mean": 3.0638333333333336,
+   "ci_lo": -4.816624251957068,
+   "ci_hi": 10.944290918623736,
+   "median": 2.857
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_duplicate_striker_frac",
+   "n": 3,
+   "mean": 0.14553333333333332,
+   "ci_lo": -0.19557426463292857,
+   "ci_hi": 0.4866409312995952,
+   "median": 0.1638,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_duplicate_striker_frac",
+   "n": 3,
+   "mean": 0.5015833333333334,
+   "ci_lo": 0.43020031315485857,
+   "ci_hi": 0.5729663535118081,
+   "median": 0.494,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_reaction_median_s",
+   "n": 2,
+   "mean": 0.89,
+   "ci_lo": -7.623157173237021,
+   "ci_hi": 9.403157173237021,
+   "median": 0.89
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_reaction_median_s",
+   "n": 3,
+   "mean": 3.8200000000000003,
+   "ci_lo": -1.2171060746064812,
+   "ci_hi": 8.857106074606481,
+   "median": 2.7199999999999998
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_reaction_p90_s",
+   "n": 2,
+   "mean": 1.7060000000000002,
+   "ci_lo": -17.175420237955542,
+   "ci_hi": 20.58742023795554,
+   "median": 1.7060000000000002
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_reaction_p90_s",
+   "n": 3,
+   "mean": 4.801333333333333,
+   "ci_lo": 1.6927276950696144,
+   "ci_hi": 7.909938971597052,
+   "median": 4.548
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "bo_reaction_censored",
+   "n": 3,
+   "mean": 0.16666666666666666,
+   "ci_lo": -0.5504421216249095,
+   "ci_hi": 0.8837754549582427,
+   "median": 0.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "bo_reaction_censored",
+   "n": 3,
+   "mean": 2.1666666666666665,
+   "ci_lo": -0.41890583960446115,
+   "ci_hi": 4.752239172937794,
+   "median": 2.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_role_flips_per_min",
+   "n": 3,
+   "mean": 13.838833333333334,
+   "ci_lo": -14.049151498031105,
+   "ci_hi": 41.726818164697775,
+   "median": 10.0285,
+   "signal": "player_role"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_role_flips_per_min",
+   "n": 3,
+   "mean": 25.915166666666664,
+   "ci_lo": 13.83843867236156,
+   "ci_hi": 37.99189466097177,
+   "median": 26.714499999999997,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_lead_changes_per_min",
+   "n": 3,
+   "mean": 3.403333333333333,
+   "ci_lo": -3.9379461699286176,
+   "ci_hi": 10.744612836595284,
+   "median": 3.6464999999999996
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_duplicate_striker_frac",
+   "n": 3,
+   "mean": 0.0019333333333333331,
+   "ci_lo": -0.002731182349211476,
+   "ci_hi": 0.006597849015878142,
+   "median": 0.00205,
+   "signal": "im_lead"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_duplicate_striker_frac",
+   "n": 3,
+   "mean": 0.2783833333333333,
+   "ci_lo": 0.029494418049833993,
+   "ci_hi": 0.5272722486168326,
+   "median": 0.29195,
+   "signal": "decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_reaction_median_s",
+   "n": 2,
+   "mean": 1.84,
+   "ci_lo": -11.50151497298339,
+   "ci_hi": 15.18151497298339,
+   "median": 1.84
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_reaction_median_s",
+   "n": 3,
+   "mean": 1.6466666666666667,
+   "ci_lo": -0.01776739352938983,
+   "ci_hi": 3.3111007268627235,
+   "median": 1.78
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_reaction_p90_s",
+   "n": 2,
+   "mean": 5.455,
+   "ci_lo": -3.553699157947827,
+   "ci_hi": 14.463699157947827,
+   "median": 5.455
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_reaction_p90_s",
+   "n": 3,
+   "mean": 4.303999999999999,
+   "ci_lo": 2.07961037662437,
+   "ci_hi": 6.528389623375629,
+   "median": 4.692
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "new",
+   "metric": "out_reaction_censored",
+   "n": 3,
+   "mean": 2.5,
+   "ci_lo": -2.914052623679022,
+   "ci_hi": 7.914052623679022,
+   "median": 3.5
+  },
+  {
+   "profile": "blackout:30@30",
+   "brain": "pre",
+   "metric": "out_reaction_censored",
+   "n": 3,
+   "mean": 3.3333333333333335,
+   "ci_lo": -2.2674653480107616,
+   "ci_hi": 8.934132014677429,
+   "median": 3.5
+  }
+ ],
+ "tests": [
+  {
+   "profile": "rcap_bad",
+   "metric": "chase_flips_per_min",
+   "pct_change": -39.05588788668655,
+   "p_mwu": 0.6625205835400575
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "role_flips_per_min",
+   "pct_change": -26.24374144429651,
+   "p_mwu": 0.6625205835400575,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "decision_flips_per_min",
+   "pct_change": -27.765681658167747,
+   "p_mwu": 0.6625205835400575
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "duplicate_decision_frac",
+   "pct_change": -11.720419167768844,
+   "p_mwu": 0.6625205835400575
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "duplicate_striker_frac",
+   "pct_change": -92.29830094617968,
+   "p_mwu": 0.5065551690490403,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "chaser_present_frac",
+   "pct_change": 16.891249207355738,
+   "p_mwu": 0.38273308888522606
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "reaction_median_s",
+   "pct_change": -20.90032154340836,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "reaction_p90_s",
+   "pct_change": -5.786944333199834,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "reaction_censored",
+   "pct_change": 46.666666666666664,
+   "p_mwu": 0.8247780950825133
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "fused_ball_err_m",
+   "pct_change": -66.03295921688708,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "local_ball_err_m",
+   "pct_change": -39.21394381273605,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "rcap_bad",
+   "metric": "goals",
+   "pct_change": 0.0,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "chase_flips_per_min",
+   "pct_change": -50.362068965517246,
+   "p_mwu": 0.08085559837005228
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "role_flips_per_min",
+   "pct_change": -46.56896551724138,
+   "p_mwu": 0.38273308888522606,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "decision_flips_per_min",
+   "pct_change": -56.695964125560536,
+   "p_mwu": 0.08085559837005228
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "duplicate_decision_frac",
+   "pct_change": -51.511456586902405,
+   "p_mwu": 0.19043026382552414
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "duplicate_striker_frac",
+   "pct_change": -91.02779047909364,
+   "p_mwu": 0.08085559837005228,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "chaser_present_frac",
+   "pct_change": -36.276364979000334,
+   "p_mwu": 0.38273308888522606
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "reaction_median_s",
+   "pct_change": -38.504823151125414,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "reaction_p90_s",
+   "pct_change": -11.372502659888868,
+   "p_mwu": 0.3864762307712327
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "reaction_censored",
+   "pct_change": -51.515151515151516,
+   "p_mwu": 0.16415972847851523
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "fused_ball_err_m",
+   "pct_change": 84.7944072310548,
+   "p_mwu": 0.6625205835400575
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "local_ball_err_m",
+   "pct_change": 107.60926170732681,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "goals",
+   "pct_change": 100.0,
+   "p_mwu": 0.6192567541768621
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_role_flips_per_min",
+   "pct_change": -49.61583362745364,
+   "p_mwu": 0.38273308888522606,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_duplicate_striker_frac",
+   "pct_change": -70.98521349061308,
+   "p_mwu": 0.08085559837005228,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_reaction_median_s",
+   "pct_change": -76.70157068062828,
+   "p_mwu": 0.14891467317876567
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_reaction_p90_s",
+   "pct_change": -64.46820327686753,
+   "p_mwu": 0.14891467317876567
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "bo_reaction_censored",
+   "pct_change": -92.3076923076923,
+   "p_mwu": 0.07652250047505922
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_role_flips_per_min",
+   "pct_change": -46.599481642024294,
+   "p_mwu": 0.19043026382552414,
+   "signal_note": "new=player_role, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_duplicate_striker_frac",
+   "pct_change": -99.30551397952463,
+   "p_mwu": 0.08085559837005228,
+   "signal_note": "new=im_lead, pre=decision"
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_reaction_median_s",
+   "pct_change": 11.74089068825911,
+   "p_mwu": 1.0
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_reaction_p90_s",
+   "pct_change": 26.742565055762103,
+   "p_mwu": 0.3864762307712327
+  },
+  {
+   "profile": "blackout:30@30",
+   "metric": "out_reaction_censored",
+   "pct_change": -25.000000000000007,
+   "p_mwu": 0.8247780950825133
+  }
+ ],
+ "sweeps": []
+}
