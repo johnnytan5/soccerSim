@@ -61,6 +61,11 @@ of the two counts; scores are the counts), `blackout` is fixed, from 5 s before 
 (scores: seconds with 2+ chasers). All of them use the same counters as the HUD, over the window alone; scores sum both teams
 unless `--team` says one. Feed `t0`/`t1` to `render_replay --t0 --t1`.
 
+`scripts/cut_clip.py --in match.mp4 --t0 A --t1 B --out cut.mp4 [--window-start 0] [--label "new brain"] [--situation rcap_bad]
+[--seed 1] [--poster cut.png]` cuts the same window out of a 3D recording (PLAY seconds; `--window-start` is the start of its
+`--record A:B`), repaints the caption strip when a label, situation or seed is given, and re-encodes like the recorder. The HUD
+counters of a 3D clip run from the start of the recording, not of the cut.
+
 ## MuJoCo 3D clip (`--record A:B`)
 
 `--record 20:40` renders PLAY seconds 20-40 of the first match of each profile (`--record-matches 0,2` or `all` for others) to

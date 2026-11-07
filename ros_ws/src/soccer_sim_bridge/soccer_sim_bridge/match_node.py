@@ -852,7 +852,8 @@ def _run_mujoco(args, bridge: MatchBridge, cfg: SimConfig, roster, viewer_env) -
     if args.record:
         from .clip_recorder import ClipRecorder
         a, _, b = args.record_window.partition(":")
-        meta = bridge.metrics_meta or {}
+        # The recorder starts before enable_metrics() runs, so read the match meta from the arguments directly.
+        meta = bridge.metrics_meta or (json.loads(args.metrics_meta) if getattr(args, "metrics_meta", None) else {})
         brains = [b for b in dict.fromkeys((meta.get("home_brain"), meta.get("away_brain"))) if b] or [meta.get("brain") or ""]
         caption = {"label": " vs ".join(brains), "situation": meta.get("profile"), "seed": meta.get("seed")}
         bridge.clip = ClipRecorder(build_world(cfg, len(roster), strip_visual=True), tints, args.record, (float(a), float(b)),
