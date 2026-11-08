@@ -52,7 +52,7 @@ class ClipRecorder:
         self._proc = subprocess.Popen([sys.executable, "-m", "soccer_sim_bridge.clip_recorder", path, out, json.dumps(opts)],
                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=viewer_environment(None, gl))
         self._q: queue.Queue = queue.Queue(maxsize=6)
-        self.offered = self.dropped = 0
+        self.offered = self.dropped = self.pickle_errors = 0
         self.stats: dict = {}
         self._thread = threading.Thread(target=self._pump, name="clip-recorder", daemon=True)
         self._thread.start()
@@ -82,8 +82,18 @@ class ClipRecorder:
     def _pump(self) -> None:
         while True:
             item = self._q.get()
+            # Pickle to bytes first: a frame that fails to pickle part-way must not leave half a record in the pipe (the
+            # renderer then reads garbage, dies, and every later frame is dropped).
             try:
-                pickle.dump(item, self._proc.stdin, protocol=pickle.HIGHEST_PROTOCOL)
+                blob = pickle.dumps(item, protocol=pickle.HIGHEST_PROTOCOL)
+            except Exception as e:  # noqa: BLE001 - skip that frame, keep the clip
+                self.dropped += 1
+                if not self.pickle_errors:
+                    self._log(f"clip {self.out}: frame not picklable, skipped ({type(e).__name__}: {e})")
+                self.pickle_errors += 1
+                continue
+            try:
+                self._proc.stdin.write(blob)
                 self._proc.stdin.flush()
             except (BrokenPipeError, ValueError):
                 return
@@ -102,7 +112,7 @@ class ClipRecorder:
             self.stats = json.loads(out.decode().strip().splitlines()[-1]) if out.strip() else {}
         except (subprocess.TimeoutExpired, ValueError):
             self._proc.kill()
-        self.stats.update(offered=self.offered, dropped=self.dropped)
+        self.stats.update(offered=self.offered, dropped=self.dropped, pickle_errors=self.pickle_errors)
         self._log(f"clip {self.out}: {self.stats}")
         return self.stats
 
