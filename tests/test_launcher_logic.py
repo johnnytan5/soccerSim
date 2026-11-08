@@ -352,3 +352,27 @@ def test_cpu_graphics_preflight_notes(tmp_path):
     gpu = [c.text for c in run(LaunchConfig(), info, False, tmp_path, env={"DISPLAY": ":0"}, platform="Linux")]
     assert any("drawn by the CPU" in t for t in linux) and any("only applies on Linux" in t for t in mac)
     assert not any("CPU" in t and "viewer" in t for t in gpu)
+
+
+def test_packet_budget_defaults_to_the_rcap_cap_and_is_range_checked():
+    base = [player("home", 2, "striker")]
+    assert LaunchConfig().packet_budget == 60000
+    assert LaunchConfig(players=base, packet_budget=0).validate() == []  # 0 = no limit
+    assert LaunchConfig(players=base, packet_budget=65535).validate() == []
+    for bad in (-1, 65536):  # the GameController's message_budget is a uint16
+        assert any("packet budget" in e for e in LaunchConfig(players=base, packet_budget=bad).validate()), bad
+
+
+def test_packet_budget_survives_the_roundtrip_and_a_wrong_type_falls_back():
+    cfg = LaunchConfig(players=[player("home", 2, "striker")], packet_budget=500)
+    assert LaunchConfig.from_dict(cfg.to_dict()).packet_budget == 500
+    assert LaunchConfig.from_dict({"packet_budget": "lots"}).packet_budget == 60000
+    assert LaunchConfig.from_dict({"packet_budget": None}).packet_budget == 60000
+
+
+def test_match_command_passes_the_packet_budget_to_the_bridge():
+    argv, env = command.build_command(LaunchConfig(**{**PRESETS[5].config.to_dict(), "packet_budget": 500}))
+    m = env["MATCH_ARGS"].split()
+    assert m[m.index("--packet-budget") + 1] == "500"
+    _, env = command.build_command(PRESETS[5].config)
+    assert env["MATCH_ARGS"].split()[env["MATCH_ARGS"].split().index("--packet-budget") + 1] == "60000"

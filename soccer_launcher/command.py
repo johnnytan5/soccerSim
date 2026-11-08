@@ -28,7 +28,8 @@ def bridge_args(cfg: LaunchConfig, web_port: int | None = None) -> list[str]:
 def match_args(cfg: LaunchConfig, web_port: int | None = None) -> list[str]:
     """Options for the match bridge (soccer_sim_bridge.match_node); run_match.sh word-splits them."""
     out = ["--ball-detector", cfg.ball_detector, "--start", "full_auto" if cfg.match_mode == "full" else "quick",
-           "--half-minutes", f"{cfg.half_minutes:g}"]
+           "--half-minutes", f"{cfg.half_minutes:g}",
+           "--packet-budget", str(cfg.packet_budget)]
     if cfg.continuous:
         out.append("--continuous")
     if cfg.detailed_bodies:

@@ -128,8 +128,11 @@ def game_control(ref: RefereeSnapshot, team_id: int, opp_team_id: int, goalkeepe
 PENALTY_SUBSTITUTE = 13  # RoboCupGameControlData: a player who is not on the pitch
 
 
-def game_control_match(snap: Snapshot, roster: list[PlayerSpec], packet_number: int) -> GameControlData:
+def game_control_match(snap: Snapshot, roster: list[PlayerSpec], packet_number: int,
+                       message_budget: dict | None = None) -> GameControlData:
     """The simulated GameController's whole state as brain reads it. Teams: [0] home, [1] away.
+
+    message_budget is the packets each team may still send ({team: remaining}); None leaves the field at 0.
 
     Players who are not in the roster are reported as substitutes, so brain does not count them as live
     teammates or opponents (role switching, goalkeeper substitution).
@@ -149,6 +152,8 @@ def game_control_match(snap: Snapshot, roster: list[PlayerSpec], packet_number: 
         info.team_number = TEAM_NUMBERS[team]
         info.goalkeeper = GOALKEEPER_ID
         info.score = snap.score.get(team, 0)
+        if message_budget is not None:
+            info.message_budget = max(0, min(65535, message_budget.get(team, 0)))  # uint16
         present = {p.player_id for p in roster if p.team == team}
         for i in range(MAX_PLAYERS):
             info.players[i].penalty = 0 if (i + 1) in present else PENALTY_SUBSTITUTE

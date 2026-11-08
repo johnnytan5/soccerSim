@@ -11,7 +11,7 @@ import os
 import sys
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import subprocess
 import tempfile
@@ -33,12 +33,14 @@ from soccer_sim.game_controller import AWAY, HOME, SET_PLAYS, GameController, Go
 from soccer_sim.joystick import FirmwareRemote, manual_velocity
 from soccer_sim.kick_model import KickRef
 from soccer_sim.loco_rpc import MODE_DAMPING, MODE_PREPARE, MODE_SOCCER, LocoState
+from soccer_sim.packet_budget import PacketBudget
 from soccer_sim.placement import robot_pose_from_dict
 from soccer_sim.referee import STATES, name_of
 from soccer_sim.roster import PlayerSpec, roster_from_json, validate_roster
 from soccer_sim.shots import Shot, ShotPanel, shot_from_dict
 from soccer_sim.field import build_world
 from soccer_sim.sim import SoccerController, World
+from soccer_sim.team_udp import TeamPacketCounter, team_port
 from soccer_sim.viewer_look import TEAM_RGBA, apply_look
 
 from . import gateway, msg_conv
@@ -160,7 +162,7 @@ def _fmt_clock(secs: float) -> str:
 
 class MatchBridge:
     def __init__(self, roster: list[PlayerSpec], cfg: SimConfig, match: MatchCfg, domain_base: int,
-                 web_port: int, full_auto: bool, camera_every: int = 2):
+                 web_port: int, full_auto: bool, camera_every: int = 2, packet_budget: int = 60000):
         problems = validate_roster(roster)
         if problems:
             raise ValueError("; ".join(problems))
@@ -168,6 +170,11 @@ class MatchBridge:
             raise ValueError(f"at most {MAX_ROBOTS} robots")
         self.roster = roster
         self.cfg = cfg
+        # Listen before the gateways come up: the brains start in parallel and send from their first second.
+        teams = tuple(t for t in (HOME, AWAY) if any(p.team == t for p in roster))
+        self.budget = PacketBudget(packet_budget, teams)
+        self.packet_counter = TeamPacketCounter({t: team_port(t) for t in teams}, self.budget.add,
+                                                lambda text: print(f"[match] {text}", flush=True))
         self.joystick_timeout = 0.5
         self.lock = threading.Lock()
         self.frames = {HOME: TeamFrame(False), AWAY: TeamFrame(True)}
@@ -338,6 +345,9 @@ class MatchBridge:
             self.last_touch = ch.spec.team
         with self.lock:
             events = self.gc.update(now, (float(ball[0]), float(ball[1]), float(ball[2])), self.last_touch)
+        for team in self.budget.newly_over():
+            self._log(f"{team} is over its packet budget ({self.budget.used(team)} > {self.budget.limit}): "
+                      f"score zeroed (it has {self.gc.score[team]} goals)")
         for ev in events:
             if isinstance(ev, PlaceBall):
                 self.world.reset_ball(ev.x, ev.y)
@@ -393,7 +403,9 @@ class MatchBridge:
             with self.lock:
                 snap = self.gc.snapshot(now)
             self.packet += 1
-            msg = msg_conv.game_control_match(snap, self.roster, self.packet)
+            remaining = {t: self.budget.remaining(t) for t in self.budget.snapshot()} if self.budget.limit else None
+            msg = msg_conv.game_control_match(replace(snap, score=self.budget.effective_score(snap.score)),
+                                              self.roster, self.packet, remaining)
             for ch in self.channels:
                 ch.gc_pub.publish(msg)
         if now - self._t_info >= 1.0:
@@ -430,7 +442,8 @@ class MatchBridge:
                 "state": state, "set_play": play, "kicking_team": snap.kicking_team,
                 "kicking": "us" if snap.kicking_team == HOME else "opponent",
                 "stopped": snap.stopped, "set_play_secs_left": snap.secondary_time,
-                "score": snap.score, "first_half": snap.first_half, "secs_remaining": snap.secs_remaining,
+                "score": self.budget.effective_score(snap.score), "raw_score": snap.score,
+                "packets": self._packet_status(), "first_half": snap.first_half, "secs_remaining": snap.secs_remaining,
                 "continuous": self.gc.cfg.continuous, "awaiting_start": snap.awaiting_start,
                 "play_secs": self.gc.play_elapsed, "event": self.gc.last_event,
                 "ball": {"x": float(ball[0]), "y": float(ball[1])},
@@ -441,6 +454,20 @@ class MatchBridge:
                 "hz": round(self.tick_hz, 1),
             }
 
+    def _packet_status(self) -> dict:
+        counting = self.packet_counter.active
+        return {t: {**v, "counting": t in counting} for t, v in self.budget.snapshot().items()}
+
+    def _packet_text(self) -> str:
+        parts = []
+        for team, v in self._packet_status().items():
+            limit = f"/{v['limit']}" if v["limit"] else ""
+            if not v["counting"]:
+                parts.append(f"{team} n/a")
+            else:
+                parts.append(f"{team} {v['used']}{limit}" + (" OVER BUDGET" if v["over"] else ""))
+        return "  ".join(parts)
+
     def overlay(self) -> tuple[str, str]:
         """Two text columns for the top of the viewer: labels, values."""
         with self.lock:
@@ -449,10 +476,11 @@ class MatchBridge:
             decision, event = ch.decision, ch.event
             vx, vy, vyaw = ch.loco.effective_velocity()
         score = st.get("score", {HOME: 0, AWAY: 0})
+        packets = self._packet_text()
         clock = "continuous" if st.get("continuous") else _fmt_clock(st.get("secs_remaining", 0))
         speed = float(np.linalg.norm(self.world.ball_velocity()))
         left = ["score", "clock", "referee", f"robot {self.selected}", "brain decision", "walk command", "ball speed",
-                "brain said", "sim rate"]
+                "brain said", "packets", "sim rate"]
         right = [
             f"home {score.get(HOME, 0)} - {score.get(AWAY, 0)} away",
             f"{clock}   half {1 if st.get('first_half', True) else 2}",
@@ -462,6 +490,7 @@ class MatchBridge:
             f"vx {vx:+.2f}  vy {vy:+.2f}  yaw {vyaw:+.2f}",
             f"{speed:.1f} m/s",
             event or "-",
+            packets,
             f"{self.tick_hz:.0f} Hz" + ("" if self.tick_hz >= 45 else "  (target 50, running slow)"),
         ]
         return "\n".join(left), "\n".join(right)
@@ -476,6 +505,7 @@ class MatchBridge:
                 self._log(f"sim ticking at {self.tick_hz:.0f} Hz (target 50): brains see a slowed-down world")
 
     def close(self) -> None:
+        self.packet_counter.close()
         if self.web is not None:
             self.web.stop()
             self.web = None
@@ -568,6 +598,8 @@ def parse_args(argv):
     p.add_argument("--ready-secs", type=float, default=30.0)
     p.add_argument("--camera-every", type=int, default=2)
     p.add_argument("--web-port", type=int, default=8765)
+    p.add_argument("--packet-budget", type=int, default=60000,
+                   help="UDP packets each team may send per match (RCAP: 60000); over it the score is zeroed; 0 = no limit")
     p.add_argument("--ball-x", type=float, default=0.0)
     p.add_argument("--ball-y", type=float, default=0.0)
     p.add_argument("--detailed-bodies", action="store_true",
@@ -591,7 +623,7 @@ def main(argv=None) -> None:
                      hold_initial=args.start == "full_auto",
                      teams=tuple(t for t in (HOME, AWAY) if any(p.team == t for p in roster)))
     bridge = MatchBridge(roster, cfg, match, args.domain_base, args.web_port, args.start == "full_auto",
-                         args.camera_every)
+                         args.camera_every, args.packet_budget)
     tints = {ch.sim.root_body_id: TEAM_RGBA[ch.spec.team] for ch in bridge.channels}
     w = bridge.world
     # The viewer copies its whole model on every sync, and ten robots' visual meshes are ~10 M triangles of it (66 ms a

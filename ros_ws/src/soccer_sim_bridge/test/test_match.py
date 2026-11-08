@@ -152,3 +152,36 @@ def test_kick_reference_and_get_up_and_stand_up_travel_through_the_gateway(match
     _rpc(probes, 1, 2008)  # GetUp
     run(bridge, probes, 0.4)
     assert ch._getup_seen >= 1.0
+
+
+def test_team_packets_are_counted_and_shown_in_status_and_overlay(match):
+    import socket
+    from soccer_sim.team_udp import team_port
+
+    bridge, probes = match
+    run(bridge, probes, 0.2)
+    before = bridge.status()["packets"]["home"]["used"]
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        for _ in range(4):
+            s.sendto(b"team packet", ("127.0.0.1", team_port(HOME)))
+    run(bridge, probes, 0.5)
+    home = bridge.status()["packets"]["home"]
+    assert home["used"] - before >= 4 and home["limit"] == 60000 and home["counting"] and not home["over"]
+    assert f"home {home['used']}/60000" in bridge.overlay()[1]
+
+
+def test_a_team_over_its_packet_budget_has_its_score_zeroed_and_reports_no_budget_left(match):
+    bridge, probes = match
+    run(bridge, probes, 1.5)
+    bridge.world.reset_ball(11.3, 0.0)  # home scores
+    run(bridge, probes, 0.2)
+    assert bridge.status()["score"]["home"] == 1
+    bridge.budget.limit = 100
+    bridge.budget.add(HOME, 101)
+    run(bridge, probes, 1.2)  # the game state goes out every 0.5 s
+    st = bridge.status()
+    assert st["score"] == {"home": 0, "away": 0} and st["raw_score"]["home"] == 1
+    assert st["packets"]["home"]["over"] and not st["packets"]["away"]["over"]
+    assert "OVER BUDGET" in bridge.overlay()[1]
+    gc = probes[0][2]["gc"][-1]
+    assert gc.teams[0].score == 0 and gc.teams[0].message_budget == 0 and gc.teams[1].message_budget > 0

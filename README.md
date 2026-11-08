@@ -222,6 +222,15 @@ to its `game_control_ip`, which works on WSL2 and on a machine with any network 
 internet). Without a default route the launcher warns that teammates may not connect. The two teams use different
 UDP ports and never see each other.
 
+**Packet budget.** Like the real GameController, the sim counts every UDP datagram each team puts on its team port
+(10000 + team number: 10131 home, 10001 away; discovery and state both count) against one whole-match total. Set it
+in the launcher (*Packet budget per team*, default 60000, the RCAP hard cap; 0 = no limit) or with
+`--packet-budget N`. The counts show in the viewer overlay and the Control tab; the game state the brains receive
+carries the packets each team has left in `message_budget`. A team that goes over has its score zeroed (the status
+keeps the real goals in `raw_score`), as in the competition rules. The brains are not throttled: like a real
+GameController, the sim counts and judges but does not stop anybody sending. For a quick look at exhaustion, pick a
+small budget (a team of five sends roughly 20 to 30 packets a second, so 500 runs out in under half a minute).
+
 ### How fast it runs
 
 One MuJoCo world steps every robot together. Each robot has its own ROS domain (brain's topics are global), a
