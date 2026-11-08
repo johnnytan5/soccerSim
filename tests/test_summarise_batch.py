@@ -195,3 +195,41 @@ def test_per_match_reduction_and_independent_inference(tmp_path):
     assert not [x for x in s["rows"] if x["metric"] == "goal_diff"]
     assert set(r) >= {"profile", "brain", "metric", "n", "mean", "ci_lo", "ci_hi", "median"}
     assert set(s) == {"meta", "rows", "tests", "sweeps"}
+
+
+def _games_csv(path, rows):
+    cols = ["profile", "match", "seed", "play_s", "goals_home", "goals_away", "home_brain", "away_brain", "home_profile",
+            "away_profile", "home_chase_flips_per_min", "away_chase_flips_per_min", "home_reaction_median_s",
+            "away_reaction_median_s"]
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, cols)
+        w.writeheader()
+        for r in rows:
+            w.writerow({c: r.get(c, "") for c in cols})
+
+
+def test_games_per_team_per_side_and_mwu(tmp_path, capsys):
+    base = dict(profile="rcap_bad", home_brain="current", away_brain="baseline", home_profile="rcap_bad", away_profile="rcap_bad")
+    a, b = tmp_path / "a.csv", tmp_path / "b.csv"
+    _games_csv(a, [{**base, "match": 0, "goals_home": 3, "goals_away": 1, "home_chase_flips_per_min": 2, "away_chase_flips_per_min": 6},
+                   {**base, "match": 1, "goals_home": 1, "goals_away": 1, "home_chase_flips_per_min": 4, "away_chase_flips_per_min": 8,
+                    "home_reaction_median_s": 1.5}])
+    swapped = {**base, "home_brain": "baseline", "away_brain": "current"}  # side-swapped run: current is away
+    _games_csv(b, [{**swapped, "match": 0, "goals_home": 0, "goals_away": 2, "home_chase_flips_per_min": 7, "away_chase_flips_per_min": 3}])
+    res = sb.games([a, b])
+    assert len(res["teams"]) == 6
+    t = next(x for x in res["teams"] if x["match"] == "0" and x["side"] == "away" and x["brain"] == "baseline" and x["goals"] == 1)
+    assert t["label"] == "pre" and t["goals_against"] == 3 and t["chase_flips_per_min"] == 6 and t["reaction_median_s"] is None
+    home_cur = next(r for r in res["sides"] if r["side"] == "home" and r["brain"] == "current" and r["metric"] == "goals")
+    assert home_cur["n"] == 2 and home_cur["mean"] == pytest.approx(2.0) and home_cur["ci_lo"] is not None
+    away_cur = next(r for r in res["sides"] if r["side"] == "away" and r["brain"] == "current" and r["metric"] == "goals")
+    assert away_cur["n"] == 1 and away_cur["ci_lo"] is None
+    test = next(x for x in res["tests"] if x["metric"] == "chase_flips_per_min")
+    new, pre = [2, 4, 3], [6, 8, 7]  # new brain's values on either side vs pre-change's
+    assert (test["n_new"], test["n_pre"]) == (3, 3)
+    assert test["p_mwu"] == pytest.approx(sb.mann_whitney_p(new, pre)) and test["pct_change"] == pytest.approx((3 - 7) / 7 * 100)
+    assert next(x for x in res["tests"] if x["metric"] == "goals")["mean_new"] == pytest.approx(2.0)
+    out = tmp_path / "g.json"
+    assert sb.main(["--games", str(a), str(b), "--out", str(out)]) == 0
+    assert "per game and team" in capsys.readouterr().out
+    assert set(json.loads(out.read_text())) == {"teams", "sides", "tests"}

@@ -232,6 +232,70 @@ def fmt_h2h(rows):
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- per game (full games, batch_matches --half-minutes)
+GAME_METRICS = ["goals", "chase_flips_per_min", "duplicate_decision_frac", "chaser_present_frac",
+                "reaction_median_s", "reaction_p90_s", "fused_ball_err_m"]
+
+
+def games(paths):
+    """One entry per game and team, and per network profile a summary. A team's value is its own (home_* / away_* column,
+    goals = its goals). Per profile and side (home/away): mean with a Student t 95% CI over games. Per profile: Mann-Whitney U
+    between the new-brain teams' values and the pre-change teams' values (current -> new, baseline -> pre, whichever side they
+    played), with the mean of each and pct_change. Games of same-brain runs have no such pair: the test needs both brains."""
+    teams = []
+    for path in paths:
+        with open(path, newline="") as f:
+            for row in csv.DictReader(f):
+                prof = (row.get("profile") or "").strip()
+                if not prof or num(row.get("goals_home")) is None or num(row.get("goals_away")) is None:
+                    continue
+                game = {"profile": prof, "match": row.get("match"), "seed": row.get("seed"), "play_s": num(row.get("play_s"))}
+                for side in ("home", "away"):
+                    brain = (row.get(f"{side}_brain") or row.get("brain") or "").strip()
+                    net = (row.get(f"{side}_profile") or prof).strip()
+                    t = {**game, "side": side, "brain": brain, "label": BRAIN_LABEL.get(brain, brain), "network": net,
+                         "goals": num(row.get(f"goals_{side}")), "goals_against": num(row.get(f"goals_{'away' if side == 'home' else 'home'}"))}
+                    for m in GAME_METRICS[1:]:
+                        t[m] = num(row.get(f"{side}_{m}"))
+                    teams.append(t)
+    sides, tests = [], []
+    for prof in dict.fromkeys(t["profile"] for t in teams):
+        mine = [t for t in teams if t["profile"] == prof]
+        for side in ("home", "away"):
+            for brain in dict.fromkeys(t["brain"] for t in mine if t["side"] == side):
+                grp = [t for t in mine if t["side"] == side and t["brain"] == brain]
+                for m in GAME_METRICS:
+                    xs = [t[m] for t in grp if t[m] is not None]
+                    if xs:
+                        mean, lo, hi = mean_ci(xs)
+                        sides.append({"profile": prof, "side": side, "brain": brain, "metric": m, "n": len(xs),
+                                      "mean": mean, "ci_lo": lo, "ci_hi": hi})
+        for m in GAME_METRICS:
+            new = [t[m] for t in mine if t["label"] == "new" and t[m] is not None]
+            pre = [t[m] for t in mine if t["label"] == "pre" and t[m] is not None]
+            if new and pre:
+                mn, mp = sum(new) / len(new), sum(pre) / len(pre)
+                tests.append({"profile": prof, "metric": m, "n_new": len(new), "n_pre": len(pre), "mean_new": mn, "mean_pre": mp,
+                              "pct_change": None if mp == 0 else (mn - mp) / mp * 100.0, "p_mwu": mann_whitney_p(new, pre)})
+    return {"teams": teams, "sides": sides, "tests": tests}
+
+
+def fmt_games(res):
+    f = lambda v: "-" if v is None else f"{v:.2f}"  # noqa: E731
+    lines = ["per game and team:"]
+    for t in res["teams"]:
+        lines.append(f"  {t['profile']} game {t['match']} {t['side']} {t['brain']}({t['network']}): goals {f(t['goals'])}  "
+                     + "  ".join(f"{m} {f(t[m])}" for m in GAME_METRICS[1:]))
+    lines.append("per profile and side (mean [95% CI] over games):")
+    for r in res["sides"]:
+        lines.append(f"  {r['profile']} {r['side']} {r['brain']} {r['metric']}: n={r['n']} {f(r['mean'])} [{f(r['ci_lo'])}, {f(r['ci_hi'])}]")
+    lines.append("new vs pre-change team values (Mann-Whitney U):")
+    for r in res["tests"]:
+        lines.append(f"  {r['profile']} {r['metric']}: new {f(r['mean_new'])} (n={r['n_new']}) pre {f(r['mean_pre'])} (n={r['n_pre']}) "
+                     f"change {f(r['pct_change'])}%  p {f(r['p_mwu'])}")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------- loading
 def num(s):
     if s is None:
@@ -388,6 +452,9 @@ def main(argv=None):
     ap.add_argument("--h2h", nargs="+", default=None, metavar="CSV",
                     help="head-to-head mode: goal difference and goals per match from one side's view, with a sign test and "
                          "Wilcoxon (replaces --main/--sweep; --out optional JSON)")
+    ap.add_argument("--games", nargs="+", default=None, metavar="CSV",
+                    help="full-game mode: goals and metrics per game and team, per profile and side mean/95% CI over games, "
+                         "and Mann-Whitney U new brain vs pre-change (--out optional JSON)")
     ap.add_argument("--perspective", default="home", choices=("home", "current", "baseline"),
                     help="--h2h: whose goals count as 'for' (a brain pools side-swapped runs)")
     ap.add_argument("--main", nargs="+", default=[], help="main batch CSVs (all brains)")
@@ -397,6 +464,13 @@ def main(argv=None):
     ap.add_argument("--new-hash", default="26b1193")
     ap.add_argument("--pre-hash", default="8d241a2")
     a = ap.parse_args(argv)
+    if a.games:
+        res = games(a.games)
+        print(fmt_games(res) if res["teams"] else "no games")
+        if a.out:
+            with open(a.out, "w") as f:
+                json.dump(res, f, indent=1)
+        return 0
     if a.h2h:
         rows = h2h(a.h2h, a.perspective)
         print(fmt_h2h(rows) or "no head-to-head rows")
