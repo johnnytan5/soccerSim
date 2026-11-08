@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
-from . import build, command, preflight, rcap
+from . import brains, build, command, preflight, rcap
 from .config import PRESETS, LaunchConfig
 from .rcap import RcapInfo
 from .runner import TOOLS, TOOLS_BY_KEY, Runner
@@ -131,7 +131,7 @@ class JobController:
             "checks": [asdict(c) for c in checks],
             "blocking": bool(preflight.blocking(checks)),
             "stale": stale,
-            "preview": command.render(cfg, str(info.root) if info.valid else None) if not errs else "",
+            "preview": command.render(cfg, str(info.root) if info.valid else None, None, self.local_root) if not errs else "",
         }
 
     def snapshot(self) -> dict:
@@ -180,22 +180,33 @@ class JobController:
         result = self.check(cfg, force)
         if result["errors"] or result["blocking"]:
             return {"ok": False, "error": "pre-flight failed", **result}
-        if not self._begin("building" if result["stale"] else "starting", "sim"):
+        if not self._begin("building" if result["stale"] or self._team_builds(cfg, force) else "starting", "sim"):
             return {"ok": False, "error": "busy; stop the current job first"}
         try:
             self.store.set_last(cfg)
         except OSError as e:
             self.log(f"could not save last config: {e}")
         info, status = self._info, self._status
-        self._thread = threading.Thread(target=self._launch_worker, args=(cfg, info, status, result["stale"]),
+        self._thread = threading.Thread(target=self._launch_worker, args=(cfg, info, status, result["stale"], force),
                                         daemon=True)
         self._thread.start()
         return {"ok": True, **result}
 
+    def _team_builds(self, cfg: LaunchConfig, force: bool = False) -> list[tuple[str, build.BuildStatus]]:
+        """(folder, status) of each distinct per-team brain folder that needs building."""
+        out = []
+        for folder in dict.fromkeys(brains.team_folders(cfg).values()):
+            if not Path(folder, "src", "brain").is_dir():
+                continue  # pre-flight reports it
+            status = brains.check(folder, self.local_root)
+            if force or status.stale:
+                out.append((folder, status))
+        return out
+
     def _rcap_env(self, info: RcapInfo | None) -> dict[str, str]:
         return {"ROBOTEDGE_ROOT": str(info.root)} if info is not None and info.valid else {}
 
-    def _launch_worker(self, cfg: LaunchConfig, info: RcapInfo, status, stale: bool) -> None:
+    def _launch_worker(self, cfg: LaunchConfig, info: RcapInfo, status, stale: bool, force: bool = False) -> None:
         try:
             if stale:
                 self.log("$ " + " ".join(build.BUILD_ARGV))
@@ -205,10 +216,18 @@ class JobController:
                     return
                 if status is not None:
                     build.write_stamp(info.root, status.fingerprint, self.store.dir)
+            for folder, tstatus in self._team_builds(cfg, force):
+                argv = list(build.BUILD_ARGV)
+                self.log(f"$ {' '.join(argv)}  (team brain {folder})")
+                code = self.runner.run(argv, brains.build_env(folder, self.local_root), self.log)
+                if code != 0 or self._stop_requested:
+                    self.log("build stopped" if self._stop_requested else f"build failed (exit {code}); sim not started")
+                    return
+                build.write_stamp(Path(folder), tstatus.fingerprint, None, brains.workspace(folder, self.local_root))
             if self._stop_requested:
                 return
             port = self._pick_port()
-            argv, env = command.build_command(cfg, str(info.root), port)
+            argv, env = command.build_command(cfg, str(info.root), port, self.local_root)
             with self._cond:
                 self._bridge_port = port
             self._set_state("running", "sim")

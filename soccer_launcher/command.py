@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import shlex
+from pathlib import Path
 
+from . import brains
 from .config import DEFAULT_DOMAIN_BASE, LaunchConfig
 
 
@@ -42,15 +44,21 @@ def match_args(cfg: LaunchConfig, web_port: int | None = None) -> list[str]:
     return out + shlex.split(cfg.extra_bridge_args)
 
 
-def _match_command(cfg: LaunchConfig, web_port: int | None) -> tuple[list[str], dict[str, str]]:
+def _match_command(cfg: LaunchConfig, web_port: int | None, local_root: Path | None = None) -> tuple[list[str], dict[str, str]]:
     roster = json.dumps([{k: p[k] for k in ("team", "player_id", "role")} for p in cfg.players], separators=(",", ":"))
     base = cfg.ros_domain_id if cfg.ros_domain_id is not None else DEFAULT_DOMAIN_BASE
     argv = ["bash", "scripts/run_match.sh"]
     if cfg.viewer:
         argv.append("--viewer")
     argv += [roster, f"tree:={cfg.tree}", f"domain_base:={base}"]
+    folders = brains.team_folders(cfg)
+    for team, folder in folders.items():  # per-team brain; absent = same command as before
+        argv += [f"{team}_brain_install:={brains.install_dir(folder, local_root)}", f"{team}_brain_root:={folder}"]
     argv += shlex.split(cfg.extra_launch_args)
-    return argv, {"MATCH_ARGS": shlex.join(match_args(cfg, web_port))}
+    env = {"MATCH_ARGS": shlex.join(match_args(cfg, web_port))}
+    if folders:  # run_match.sh overlays these workspaces on ros_ws
+        env["SS_WS_DIR"] = ":".join(dict.fromkeys(str(brains.workspace(f, local_root)) for f in folders.values()))
+    return argv, env
 
 
 def _graphics_env(cfg: LaunchConfig, env: dict[str, str]) -> None:
@@ -59,10 +67,11 @@ def _graphics_env(cfg: LaunchConfig, env: dict[str, str]) -> None:
         env["SIM_VIEWER_GL"] = "cpu"
 
 
-def build_command(cfg: LaunchConfig, rcap_root: str | None = None, web_port: int | None = None) -> tuple[list[str], dict[str, str]]:
+def build_command(cfg: LaunchConfig, rcap_root: str | None = None, web_port: int | None = None,
+                  local_root: Path | None = None) -> tuple[list[str], dict[str, str]]:
     """Returns (argv, extra_env). argv is relative to the soccerSim root; env is merged over os.environ."""
     if cfg.is_match:
-        argv, env = _match_command(cfg, web_port)
+        argv, env = _match_command(cfg, web_port, local_root)
         if cfg.sim_vy_max is not None:
             env["SIM_VY_MAX"] = str(cfg.sim_vy_max)
         _graphics_env(cfg, env)
@@ -96,9 +105,10 @@ def build_command(cfg: LaunchConfig, rcap_root: str | None = None, web_port: int
     return argv, env
 
 
-def render(cfg: LaunchConfig, rcap_root: str | None = None, web_port: int | None = None) -> str:
+def render(cfg: LaunchConfig, rcap_root: str | None = None, web_port: int | None = None,
+           local_root: Path | None = None) -> str:
     """The equivalent one-liner for the preview pane / copy-paste."""
-    argv, env = build_command(cfg, rcap_root, web_port)
+    argv, env = build_command(cfg, rcap_root, web_port, local_root)
     prefix = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
     return f"{prefix} pixi run {shlex.join(argv)}"
 

@@ -39,6 +39,7 @@ async function api(path, body) {
 const DEFAULTS = {role: "goal_keeper", player_id: 1, tree: "game.xml", match_mode: "quick", viewer: true, ball_detector: "yolo",
   spawn_x: null, spawn_y: null, spawn_yaw: null, ball_x: null, ball_y: null, referee_schedule: "", rcap_root: "",
   sim_vy_max: null, camera_gl: "auto", mujoco_gl: "", ros_domain_id: null, extra_bridge_args: "", extra_launch_args: "",
+  home_brain_root: "", away_brain_root: "",
   players: [], half_minutes: 10, continuous: false, detailed_bodies: false, graphics: "gpu", packet_budget: 60000};
 const S = {
   cfg: {...DEFAULTS}, parseErrors: {}, srv: null, static: null, check: null, checkSeq: 0, checkTimer: null,
@@ -79,6 +80,10 @@ const FIELDS = [
     {k: "detailed_bodies", label: "Detailed robot bodies", type: "switch", show: c => isMatch(c) && c.viewer, help: c => c.detailed_bodies
       ? `Real T2 meshes, about 1 million triangles each${robotCount(c) > 2 ? `: ${robotCount(c)} robots will make the viewer lag` : ""}. Light parts are tinted by team.`
       : "Off: simple bodies, home blue and away orange, no shadows. Keeps the viewer smooth with many robots."},
+  ]},
+  {group: "Brains (blank = rcap clone)", show: isMatch, items: [
+    {k: "home_brain_root", label: "Home brain folder", type: "text", ph: "~/Robotedge-5v5-RCAP2026", help: () => "A Robotedge folder for the home team. Its brain is built into its own workspace (ros_ws_brains/) the first time and whenever the folder changes. Blank: the rcap clone."},
+    {k: "away_brain_root", label: "Away brain folder", type: "text", ph: "~/Robotedge-other", help: () => "Same for the away team. Set both to play two brains against each other."},
   ]},
   {group: "Perception", items: [
     {k: "ball_detector", label: "Ball detector", type: "seg", opts: [["yolo", "YOLO"], ["ground_truth", "Ground truth"]], help: c =>
@@ -361,7 +366,7 @@ function renderSidebar() {
       onclick: () => {
         if (!p.available) { toast(`${p.name}: ${p.blocked_reason}`, "warn"); return; }
         if (p.custom && isMatch(S.cfg)) { S.cur = "preset:" + i; renderSidebar(); focusRoster(); return; }
-        applyCfg({...p.config, rcap_root: S.cfg.rcap_root}, "preset:" + i);
+        applyCfg({...p.config, rcap_root: S.cfg.rcap_root, home_brain_root: S.cfg.home_brain_root, away_brain_root: S.cfg.away_brain_root}, "preset:" + i);
         if (p.custom) focusRoster();
       }},
       h("span", {class: "t"}, h("span", {text: p.name}),

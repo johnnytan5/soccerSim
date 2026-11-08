@@ -231,6 +231,32 @@ keeps the real goals in `raw_score`), as in the competition rules. The brains ar
 GameController, the sim counts and judges but does not stop anybody sending. For a quick look at exhaustion, pick a
 small budget (a team of five sends roughly 20 to 30 packets a second, so 500 runs out in under half a minute).
 
+### Two brains in one match
+
+By default both teams run the one brain built from `$ROBOTEDGE_ROOT`. To play two brains against each other,
+give each team its own Robotedge folder: **Home brain folder** and **Away brain folder** in the match form's
+*Brains* card (`home_brain_root` / `away_brain_root` in the config). Either can stay blank (that team then uses
+the rcap clone).
+
+Each folder's brain is built into its own workspace, `ros_ws_brains/<folder name>-<hash>` (git-ignored), with
+that folder's `config.yaml`, behaviour trees and vision config. The launcher builds it on the first launch and
+again only when the folder's brain code (or the build scripts) changed. To build ahead of time:
+
+```bash
+pixi run build-brains ~/Robotedge-baseline ~/Robotedge-new   # or no arguments: the folders of the last launched config
+```
+
+Example: home runs the current work, away runs an older checkout.
+
+```bash
+git -C ~/Robotedge worktree add ~/Robotedge-baseline v1.0     # any second checkout will do
+pixi run launch    # Match mode, "Team vs team (5v5)", Away brain folder = ~/Robotedge-baseline, Launch
+```
+
+Under the hood the launcher passes `home_brain_install:=`, `home_brain_root:=` (and the `away_` pair) to
+`match.launch.py`, builds with `SS_WS_DIR=<workspace> ROBOTEDGE_ROOT=<folder> scripts/setup_ws.sh`, and
+`scripts/run_match.sh` overlays the workspaces listed in `SS_WS_DIR` (colon-separated) on `ros_ws`.
+
 ### How fast it runs
 
 One MuJoCo world steps every robot together. Each robot has its own ROS domain (brain's topics are global), a
