@@ -43,6 +43,7 @@ sys.path.insert(0, str(ROOT))
 from soccer_launcher import command, netns  # noqa: E402
 from soccer_launcher.config import _match, _players  # noqa: E402
 from soccer_sim import metrics  # noqa: E402
+from soccer_sim.game_controller import MatchCfg  # noqa: E402
 
 
 DEFAULT_BLACKOUT_OFFSET_S = 20.0
@@ -71,7 +72,12 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--profiles", default="good", help="comma list: none, good, rcap_bad, terrible, blackout[:T[@O]]")
     p.add_argument("--matches", type=int, default=1, help="matches per profile")
-    p.add_argument("--duration", type=float, default=120.0, help="simulated seconds of PLAY to record per match")
+    p.add_argument("--duration", type=float, default=120.0,
+                   help="simulated seconds of PLAY to record per match (continuous matches; ignored with --half-minutes)")
+    p.add_argument("--half-minutes", type=float, default=None, metavar="M",
+                   help="full game: two halves of M minutes with kick-offs and half-time (GameController, not continuous); the "
+                        "match ends at FINISHED after the second half and the metrics cover PLAY time of both halves. "
+                        "--duration is ignored; --trace then covers the whole game (all states, with half and score)")
     p.add_argument("--brain", choices=("current", "baseline"), default="current")
     p.add_argument("--home-brain", choices=("current", "baseline"), default=None, help="default: --brain")
     p.add_argument("--away-brain", choices=("current", "baseline"), default=None, help="default: --brain")
@@ -84,8 +90,9 @@ def parse_args(argv=None):
     p.add_argument("--players", type=int, default=5, help="players per team (5 = 5v5; ids 1..N, player 1 is the keeper)")
     p.add_argument("--yolo", action="store_true", help="YOLO ball detection from the rendered camera (slow) instead of ground truth")
     p.add_argument("--trace", action="store_true", help="also write <stem>.trace.jsonl next to each match JSON (10 Hz PLAY trace)")
-    p.add_argument("--record", default="", metavar="A:B",
+    p.add_argument("--record", default="", metavar="A:B|full",
                    help="also render PLAY seconds A:B as <stem>.mp4 (MuJoCo, free camera above the pitch, 720p/25 fps, GPU GL, NVENC); "
+                        "'full' records the whole game from the first frame to FINISHED, half-time included; "
                         "implies --trace. Which matches: --record-matches")
     p.add_argument("--record-matches", default="0", help="match numbers (0-based, per profile) to record, comma list or 'all'")
     p.add_argument("--parallel", type=int, default=1, metavar="K",
@@ -231,9 +238,50 @@ def shutdown(signum=None, frame=None) -> None:
         raise SystemExit(128 + signum)
 
 
-RECORD_ALLOWANCE_S = 600.0  # extra wall seconds for the clip render when --record is set
+RECORD_ALLOWANCE_S = 600.0  # extra wall seconds for the clip render when --record is set (floor)
+RECORD_FPS = 25  # the recorder's frame rate (clip_recorder.FPS)
+RECORD_S_PER_FRAME = 0.06  # render + encode wall seconds per frame (about 30 ms per frame, doubled for slack)
 DOMAIN_SPACING = 20  # a match uses up to 10 consecutive ROS domains
 MAX_DOMAIN = 232
+
+
+def play_secs(args) -> float:
+    """Simulated PLAY seconds of a match: --duration, or both halves with --half-minutes."""
+    return 2 * args.half_minutes * 60.0 if args.half_minutes else args.duration
+
+
+def game_secs(args) -> float:
+    """Simulated seconds from the first frame to the end of the match. A two-half game adds, per half, INITIAL + READY + SET
+    (game_controller.MatchCfg initial_secs/set_secs and --ready-secs), plus the half-time pause."""
+    if not args.half_minutes:
+        return args.duration + args.ready_secs
+    cfg = MatchCfg()
+    setup = cfg.initial_secs + args.ready_secs + cfg.set_secs
+    return play_secs(args) + 2 * setup + cfg.halftime_secs
+
+
+def record_frames(args) -> int:
+    """Frames the recorder renders for --record: the window, or the whole game."""
+    if args.record == "full":
+        return int(game_secs(args) * RECORD_FPS)
+    a, _, b = args.record.partition(":")
+    return int((float(b) - float(a)) * RECORD_FPS) if args.record else 0
+
+
+def record_allowance_s(args) -> float:
+    """Extra wall seconds for the render after the match ends: 0.06 s per frame, never below RECORD_ALLOWANCE_S."""
+    return max(RECORD_ALLOWANCE_S, RECORD_S_PER_FRAME * record_frames(args))
+
+
+def match_limit_s(args, recording: bool) -> float:
+    """Wall seconds before a match counts as timed out (the sim runs at real time)."""
+    return game_secs(args) + args.timeout_extra + (record_allowance_s(args) if recording else 0.0)
+
+
+def metrics_play_secs(args) -> float:
+    """Bridge --metrics-play-secs. Continuous: --duration. Two halves: both halves plus a minute of slack, so the
+    GameController's FINISHED after the second half (not this limit) ends the match."""
+    return play_secs(args) + 60.0 if args.half_minutes else args.duration
 
 
 def slot_plan(args, k: int) -> tuple[str, int]:
@@ -259,8 +307,10 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: in
     meta = {"profile": profile, "brain": brain_tag, "match": n, "home_brain": home_brain, "away_brain": away_brain,
             "home_profile": home_profile, "away_profile": away_profile, "seed": args.seed + n,
             "roster": f"{args.players}v{args.players}"}
+    if args.half_minutes:
+        meta["half_minutes"] = args.half_minutes
     extra = (f"--web-port -1 --ready-secs {args.ready_secs:g} --seed {meta['seed']} --metrics-out {json_path} "
-             f"--metrics-play-secs {args.duration:g} "
+             f"--metrics-play-secs {metrics_play_secs(args):g} "
              f"--play-flag {flag_path} --blackout-file {bo_path}")
     if slot:  # count only this slot's team broadcasts (the other slots' bridges listen on their own subnets)
         extra += f" --packet-bind {netns.slot_names(slot)['broadcast']}"
@@ -269,7 +319,10 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: in
         extra += f" --record {json_path.with_suffix('.mp4')} --record-window {args.record}"
     if args.trace or args.record:
         extra += f" --trace-out {json_path.with_suffix('.trace.jsonl')}"
-    cfg = _match(_players(ids, ids), continuous=True, network_profile="good" if blackout else profile,
+        if args.half_minutes or args.record == "full":
+            extra += " --trace-all"
+    game = {"continuous": False, "half_minutes": args.half_minutes} if args.half_minutes else {"continuous": True}
+    cfg = _match(_players(ids, ids), **game, network_profile="good" if blackout else profile,
                  network_overrides=overrides, viewer=False, simulator="mujoco",
                  ros_domain_id=domain_base, extra_bridge_args=extra)
     cfg.netns_slot = slot
@@ -299,13 +352,13 @@ def run_one(args, profile: str, n: int, out: Path, logs: Path, plan: dict, k: in
                                             stdin=subprocess.DEVNULL, stdout=lf, stderr=subprocess.STDOUT)
                     with _LOCK:
                         RUNNING.append(proc)
-                    limit = args.duration + args.ready_secs + args.timeout_extra + (RECORD_ALLOWANCE_S if recording else 0.0)
+                    limit = match_limit_s(args, recording)
                     while proc.poll() is None and time.monotonic() - t0 < limit and not json_path.exists() and not STOP.is_set():
                         if blackout is not None:
                             window = _drive_blackout(blackout, window, flag_path, bo_path, run_cfg, log)
                         time.sleep(0.2)
                     if json_path.exists() and recording:  # the metrics are on disk; let the clip render finish (bounded)
-                        wait_end = time.monotonic() + RECORD_ALLOWANCE_S
+                        wait_end = time.monotonic() + record_allowance_s(args)
                         while proc.poll() is None and time.monotonic() < wait_end and not STOP.is_set():
                             time.sleep(0.5)
                     time.sleep(1.0 if json_path.exists() else 0.0)
@@ -377,8 +430,10 @@ def _gpu_reexec(args, argv) -> None:
 def main(argv=None) -> int:
     args = parse_args(argv)
     _gpu_reexec(args, argv)
-    if args.record and not re.fullmatch(r"\d+(\.\d+)?:\d+(\.\d+)?", args.record):
-        raise SystemExit("--record takes PLAY seconds as A:B, e.g. 20:40")
+    if args.record and args.record != "full" and not re.fullmatch(r"\d+(\.\d+)?:\d+(\.\d+)?", args.record):
+        raise SystemExit("--record takes PLAY seconds as A:B, e.g. 20:40, or 'full'")
+    if args.half_minutes is not None and not 0.1 <= args.half_minutes <= 60:
+        raise SystemExit("--half-minutes must be 0.1-60")
     profiles = [p.strip() for p in args.profiles.split(",") if p.strip()]
     bad = [p for p in profiles if not valid_profile(p)]
     if bad:
@@ -434,7 +489,8 @@ def main(argv=None) -> int:
         if STOP.is_set():
             return
         print(f"[batch] {'/'.join(team_brains(args))} {profile} match {n + 1}/{args.matches} ({args.players}v{args.players}, "
-              f"{args.duration:g} s of play" + (f", slot {k}" if args.parallel > 1 else "") + ")", flush=True)
+              + (f"2 x {args.half_minutes:g} min halves" if args.half_minutes else f"{args.duration:g} s of play")
+              + (f", slot {k}" if args.parallel > 1 else "") + ")", flush=True)
         row = run_one(args, profile, n, out, logs, plan, k)
         if row is None:
             return

@@ -113,3 +113,61 @@ def test_csv_header_check(tmp_path):
     old.write_text("a,b\n1,2\n")
     with pytest.raises(SystemExit, match="missing: c"):
         bm.check_csv_header(old, cols)
+
+
+def _args(*a):
+    return bm.parse_args(list(a))
+
+
+def test_half_minutes_builds_a_two_half_match():
+    a = _args("--half-minutes", "5", "--duration", "30")
+    assert bm.play_secs(a) == 600.0 and bm.metrics_play_secs(a) == 660.0  # --duration ignored; FINISHED ends the match
+    assert bm.game_secs(a) == 600.0 + 2 * (3.0 + 6.0 + 3.0) + 5.0  # two kick-off set-ups and the half-time pause
+    ids = (1, 2)
+    cfg = _match(_players(ids, ids), continuous=False, half_minutes=5.0, network_profile="good", viewer=False)
+    margs = command.match_args(cfg)
+    assert margs[margs.index("--half-minutes") + 1] == "5" and "--continuous" not in margs
+    assert "--continuous" in command.match_args(_match(_players(ids, ids), continuous=True))
+    assert cfg.validate() == []
+
+
+def test_continuous_keeps_duration():
+    a = _args("--duration", "90")
+    assert a.half_minutes is None and bm.play_secs(a) == 90.0 and bm.metrics_play_secs(a) == 90.0
+    assert bm.game_secs(a) == 96.0
+
+
+def test_record_allowance_scales_with_frames():
+    win = _args("--record", "20:40")
+    assert bm.record_frames(win) == 500 and bm.record_allowance_s(win) == bm.RECORD_ALLOWANCE_S
+    full = _args("--half-minutes", "5", "--record", "full")
+    frames = bm.record_frames(full)
+    assert frames == int(bm.game_secs(full) * 25) and frames > 15000
+    assert bm.record_allowance_s(full) == 0.06 * frames > bm.RECORD_ALLOWANCE_S
+    assert bm.match_limit_s(full, True) == bm.game_secs(full) + full.timeout_extra + 0.06 * frames
+    assert bm.match_limit_s(full, False) == bm.game_secs(full) + full.timeout_extra
+
+
+def test_match_over_waits_for_the_second_half():
+    src = (ROOT / "ros_ws/src/soccer_sim_bridge/soccer_sim_bridge/match_node.py").read_text()
+    assert "def match_over(st: dict)" in src  # rclpy is not importable here: check the rule on its source
+    ns: dict = {}
+    body = src[src.index("    @staticmethod\n    def match_over"):src.index("    def enable_trace")]
+    exec("class M:\n" + body, ns)
+    over = ns["M"].match_over
+    assert not over({"state": "FINISHED", "first_half": True, "continuous": False})  # half-time
+    assert over({"state": "FINISHED", "first_half": False, "continuous": False})  # full time
+    assert over({"state": "FINISHED", "first_half": True, "continuous": True})
+    assert not over({"state": "PLAYING", "first_half": False, "continuous": False})
+
+
+def test_clip_recorder_full_window_matches_every_state():
+    spec = importlib.util.spec_from_file_location(
+        "clip_recorder_full", ROOT / "ros_ws/src/soccer_sim_bridge/soccer_sim_bridge/clip_recorder.py")
+    cr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cr)
+    full, win = cr.ClipRecorder.__new__(cr.ClipRecorder), cr.ClipRecorder.__new__(cr.ClipRecorder)
+    full.window, win.window = None, (20.0, 40.0)
+    assert full.full and not win.full
+    assert full.wants(0.0, False) and full.wants(999.0, False) and full.wants(5.0, True)  # READY, half-time, FINISHED
+    assert win.wants(30.0, True) and not win.wants(30.0, False) and not win.wants(10.0, True) and not win.wants(41.0, True)
