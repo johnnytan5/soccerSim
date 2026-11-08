@@ -54,6 +54,10 @@ class LaunchConfig:
     ros_domain_id: int | None = None
     extra_bridge_args: str = ""
     extra_launch_args: str = ""
+    # Match, head-to-head: a Robotedge folder per team ("" = the one brain from rcap_root / $ROBOTEDGE_ROOT).
+    # Each folder's brain is built into its own workspace, ros_ws_brains/<name> (see brains.py).
+    home_brain_root: str = ""
+    away_brain_root: str = ""
 
     @property
     def is_match(self) -> bool:

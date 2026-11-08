@@ -20,17 +20,22 @@ class BuildStatus:
     fingerprint: str
 
 
-def _stamp_path(launcher_dir: Path | None) -> Path:
+def _stamp_path(launcher_dir: Path | None, ws: Path | None = None) -> Path:
+    if ws is not None:
+        return ws / "build_stamp.json"
     return (launcher_dir or project_root() / ".launcher") / "build_stamp.json"
 
 
-def check(rcap_root: Path, launcher_dir: Path | None = None, local_root: Path | None = None) -> BuildStatus:
+def check(rcap_root: Path, launcher_dir: Path | None = None, local_root: Path | None = None,
+          ws: Path | None = None) -> BuildStatus:
+    """Is the workspace stale against rcap_root? ws = another workspace (a per-team brain build), whose stamp
+    lives inside it; default is ros_ws with the stamp in the launcher dir."""
     local_root = local_root or project_root()
     fp = rcap.fingerprint(rcap_root, local_root)
-    if not (local_root / "ros_ws" / "install" / "setup.bash").is_file():
+    if not ((ws or local_root / "ros_ws") / "install" / "setup.bash").is_file():
         return BuildStatus(True, "not built yet", fp)
     try:
-        stamp = json.loads(_stamp_path(launcher_dir).read_text())
+        stamp = json.loads(_stamp_path(launcher_dir, ws).read_text())
     except (OSError, ValueError):
         return BuildStatus(True, "no record of the last build", fp)
     if stamp.get("rcap_root") != str(rcap_root):
@@ -40,8 +45,8 @@ def check(rcap_root: Path, launcher_dir: Path | None = None, local_root: Path | 
     return BuildStatus(False, "", fp)
 
 
-def write_stamp(rcap_root: Path, fingerprint: str, launcher_dir: Path | None = None) -> None:
-    path = _stamp_path(launcher_dir)
+def write_stamp(rcap_root: Path, fingerprint: str, launcher_dir: Path | None = None, ws: Path | None = None) -> None:
+    path = _stamp_path(launcher_dir, ws)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps({"rcap_root": str(rcap_root), "fingerprint": fingerprint}))
