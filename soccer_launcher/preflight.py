@@ -6,6 +6,7 @@ import socket
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import brains
 from .config import LaunchConfig
 from .rcap import RcapInfo
 from .store import project_root
@@ -51,6 +52,11 @@ def run(cfg: LaunchConfig, info: RcapInfo, stale: bool, root: Path | None = None
         out.append(Check("fail", f"missing {MODEL}", fix="fetch-models"))
     else:
         out.append(Check("warn", f"missing {MODEL} (not needed for ground_truth)"))
+    for team, folder in brains.team_folders(cfg).items():
+        if Path(folder, "src", "brain").is_dir():
+            out.append(Check("ok", f"{team} brain: {folder} (built into ros_ws_brains/{brains.sanitize(folder)} if stale)"))
+        else:
+            out.append(Check("fail", f"{team} brain folder {folder} has no src/brain"))
     out.append(Check("warn", "build is stale: it will be rebuilt first") if stale else Check("ok", "build is up to date"))
     if cfg.viewer and platform == "Linux" and not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")) \
             and not Path("/tmp/.X11-unix/X0").exists():
