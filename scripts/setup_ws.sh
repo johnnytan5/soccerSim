@@ -2,7 +2,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PACKAGES="${PACKAGES:-brain}"
-SRC="$ROOT/ros_ws/src"
+# SS_WS_DIR: colcon workspace to build into (default ros_ws). The launcher builds one per team brain folder (ros_ws_brains/<name>).
+WS="${SS_WS_DIR:-$ROOT/ros_ws}"
+SRC="$WS/src"
 # ROBOTEDGE_ROOT comes from scripts/activate.sh (run through `pixi run`).
 : "${ROBOTEDGE_ROOT:?run through pixi: pixi run build-sim}"
 if [ ! -d "$ROBOTEDGE_ROOT/src/brain" ]; then
@@ -64,7 +66,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
   EXE_LINKER_FLAGS="-DCMAKE_EXE_LINKER_FLAGS=-Wl,-dead_strip_dylibs"
 fi
 
-cd "$ROOT/ros_ws"
+cd "$WS"
 # shellcheck disable=SC2086
 colcon build --symlink-install \
   --packages-up-to $PACKAGES \

@@ -2,6 +2,10 @@
 
 roster:      JSON list of {team, player_id, role}; team is "home" or "away".
 domain_base: ROS domain of the first robot; robot i uses domain_base + i, the same as the match bridge.
+home_brain_install / away_brain_install: colcon install dir of another brain build for that team's robots (empty = the
+             sourced one). Its brain_node is run by absolute path; the rest of the environment is shared.
+home_brain_root / away_brain_root: Robotedge checkout whose config.yaml, behaviour trees and vision config that team's
+             brains use (empty = $ROBOTEDGE_ROOT). Set together with the install dir for a head-to-head match.
 """
 
 import json
@@ -17,16 +21,27 @@ TEAM_NUMBERS = {"home": 131, "away": 1}  # mirrors soccer_sim.roster.TEAM_NUMBER
 START_SIDE = {1: "right", 2: "left", 3: "right", 4: "left", 5: "right"}
 
 
+def team_brain(team, install, root, default_root):
+    """(brain_node executable or None for the sourced one, Robotedge root) of a team."""
+    exe = os.path.join(install, "brain", "lib", "brain", "brain_node") if install else None
+    return exe, root or default_root
+
+
 def _brains(context):
-    root = os.environ.get("ROBOTEDGE_ROOT", os.path.expanduser("~/Robotedge-5v5-RCAP2026"))
-    brain_dir = os.path.join(root, "src", "brain")
+    default_root = os.environ.get("ROBOTEDGE_ROOT", os.path.expanduser("~/Robotedge-5v5-RCAP2026"))
     roster = json.loads(LaunchConfiguration("roster").perform(context))
     base = int(LaunchConfiguration("domain_base").perform(context))
     tree = LaunchConfiguration("tree").perform(context)
     enable_com = LaunchConfiguration("enable_com").perform(context).lower() == "true"
     gc_ip = LaunchConfiguration("game_control_ip").perform(context)
+    team_cfg = {}
+    for team in ("home", "away"):
+        team_cfg[team] = team_brain(team, LaunchConfiguration(f"{team}_brain_install").perform(context),
+                                    LaunchConfiguration(f"{team}_brain_root").perform(context), default_root)
     nodes = []
     for i, p in enumerate(roster):
+        exe, root = team_cfg[p["team"]]
+        brain_dir = os.path.join(root, "src", "brain")
         overrides = {
             "tree_file_path": os.path.join(brain_dir, "behavior_trees", tree),
             "vision_config_path": os.path.join(root, "src", "vision", "config", "vision.yaml"),
@@ -44,8 +59,8 @@ def _brains(context):
             overrides["game_control_ip"] = gc_ip
         nodes.append(
             Node(
-                package="brain",
-                executable="brain_node",
+                package="brain" if exe is None else None,
+                executable="brain_node" if exe is None else exe,
                 name="brain_node",
                 output="screen",
                 parameters=[os.path.join(brain_dir, "config", "config.yaml"), overrides],
@@ -63,6 +78,10 @@ def generate_launch_description():
             DeclareLaunchArgument("tree", default_value="game.xml"),
             DeclareLaunchArgument("enable_com", default_value="true"),
             DeclareLaunchArgument("game_control_ip", default_value=""),
+            DeclareLaunchArgument("home_brain_install", default_value=""),
+            DeclareLaunchArgument("away_brain_install", default_value=""),
+            DeclareLaunchArgument("home_brain_root", default_value=""),
+            DeclareLaunchArgument("away_brain_root", default_value=""),
             OpaqueFunction(function=_brains),
         ]
     )

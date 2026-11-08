@@ -7,6 +7,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 set +u
 # shellcheck disable=SC1091
 source "$ROOT/ros_ws/install/setup.bash"
+# SS_WS_DIR: colon-separated extra workspaces overlaid on ros_ws (the per-team brain builds, ros_ws_brains/<name>).
+if [ -n "${SS_WS_DIR:-}" ]; then
+  IFS=: read -ra EXTRA_WS <<< "$SS_WS_DIR"
+  for ws in "${EXTRA_WS[@]}"; do
+    [ -n "$ws" ] && [ "$(cd "$ws" && pwd)" != "$ROOT/ros_ws" ] && source "$ws/install/setup.bash"
+  done
+fi
 set -u
 
 PY=python
