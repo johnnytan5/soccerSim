@@ -231,6 +231,19 @@ def text_size(text: str, scale: float = TEXT_SCALE, thick: int = 1) -> tuple[int
     return w, h + base
 
 
+LABEL_ALPHA = 0.4  # robot label fill opacity: the robot and the ball behind a label stay visible
+
+
+def translucent_box(img, x0: int, y0: int, x1: int, y1: int, colour, alpha: float = LABEL_ALPHA) -> None:
+    """Fill a rectangle blended over the image (clipped to it)."""
+    h, w = img.shape[:2]
+    x0, y0, x1, y1 = max(0, x0), max(0, y0), min(w, x1), min(h, y1)
+    if x1 <= x0 or y1 <= y0:
+        return
+    roi = img[y0:y1, x0:x1]
+    roi[:] = cv2.addWeighted(roi, 1.0 - alpha, np.full_like(roi, colour), alpha, 0)
+
+
 def put_text(img, text, org, scale=TEXT_SCALE, colour=TEXT, thick=1, outline=True) -> None:
     """Text with a dark outline so it reads on the pitch, the tint and the 3D scene."""
     if outline:

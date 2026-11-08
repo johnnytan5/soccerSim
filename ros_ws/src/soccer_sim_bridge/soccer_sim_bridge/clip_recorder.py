@@ -164,9 +164,10 @@ def draw_overlay(img: np.ndarray, scene, info: dict, state: OverlayState | None 
         bw, bh = tw + 10, th + 8
         x0, y0 = placer.place(bw, bh, [(pt[0] - bw // 2, pt[1] - bh - 6 - k * (bh + 4)) for k in range(4)])
         lead = bool(r.get("im_lead"))
-        cv2.rectangle(img, (x0, y0), (x0 + bw, y0 + bh), ov.TEAM[r["team"]], -1)
-        cv2.rectangle(img, (x0, y0), (x0 + bw, y0 + bh), (255, 255, 255) if lead else (0, 0, 0), 3 if lead else 1)
-        cv2.putText(img, text, (x0 + 5, y0 + bh - 6), ov.FONT, ov.TEXT_SCALE, ov.TEAM_TEXT[r["team"]], 1, cv2.LINE_AA)
+        # Translucent fill so the robot and the ball behind the label stay visible; the team colour stays in the border.
+        ov.translucent_box(img, x0, y0, x0 + bw, y0 + bh, ov.TEAM[r["team"]])
+        cv2.rectangle(img, (x0, y0), (x0 + bw, y0 + bh), (255, 255, 255) if lead else ov.TEAM[r["team"]], 3 if lead else 2)
+        ov.put_text(img, text, (x0 + 5, y0 + bh - 6))
         cv2.line(img, (x0 + bw // 2, y0 + bh), (pt[0], pt[1] + 6), (0, 0, 0), 1, cv2.LINE_AA)
         if ov.is_chaser(r):  # filled triangle above the label
             ov.chaser_marker(img, (x0 + bw // 2, y0 - 3), r["team"])
