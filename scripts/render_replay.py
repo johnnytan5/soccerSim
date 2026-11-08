@@ -11,7 +11,7 @@ outfield rank under each robot, a filled triangle above every chaser (decision i
 chaser of a team with two or more, each robot's fused-ball belief as a hollow dot joined to the true ball, a flash ring on a ball
 event with the reaction timer next to the ball (final time held ~1 s), a per-team HUD (chase flips, seconds with 2+ chasers,
 seconds with no chaser, mean fused-ball error, worst comm mode; all counted from the clip start) and a caption (brain label,
-network situation, seed) with a legend. Situation and seed default to the match JSON next to the trace.
+network situation, seed) with a legend. A whole-game trace (--trace-all rows carry state, half, score) also shows the half and score next to the time (--t0/--t1 are PLAY seconds, which run on across the halves). Situation and seed default to the match JSON next to the trace.
 Layout: --layout side puts two traces left/right (1280x720, 640 px panels); stacked puts them one above the other (1280x1440,
 full-width panels, bigger pitch and one-line legend). Default: side for one trace, stacked for two.
 Numpy + cv2 per frame, piped to ffmpeg h264_nvenc (-preset p5 -cq 28), libx264 when NVENC is unavailable.
@@ -140,6 +140,7 @@ class Panel:
             canvas[self.y0:self.y0 + H, self.x0:self.x0 + self.w] = img
             return
         self._feed(st)
+        self._row = st.get("row") or {}
         rx, ry, rw, rh = self.rect
         if st["blackout"]:  # red tint over the pitch
             roi = img[ry:ry + rh, rx:rx + rw]
@@ -216,6 +217,15 @@ class Panel:
         self._footer(img, robots, t, ry + rh + 8)
         canvas[self.y0:self.y0 + H, self.x0:self.x0 + self.w] = img
 
+    @staticmethod
+    def game_text(row: dict) -> str:
+        """'H1  2 - 1  PLAYING' from a whole-game trace row (state, half, score); '' for a PLAY-only trace."""
+        sc = row.get("score")
+        if not sc:
+            return ""
+        state = row.get("state")
+        return f"H{row.get('half', 1)}  {sc.get('home', 0)} - {sc.get('away', 0)}" + (f"  {state}" if state and state != "PLAYING" else "")
+
     def _footer(self, img: np.ndarray, robots: list[dict], t: float, y: int) -> None:
         teams = sorted({r["team"] for r in robots}, key=lambda tm: tm != "home")
         hud_h = HUD_ROW * 5
@@ -226,11 +236,16 @@ class Panel:
                 ov.draw_team_hud(img, x, y + k * (hud_h + 10), bw, team, self.counters.stats(team))
             y += len(teams) * (hud_h + 10)
             ov.put_text(img, f"t = {t:.1f} s", (x + 4, y + 30), 1.0, TEXT, 2)
+            game = self.game_text(getattr(self, "_row", {}))
+            if game:
+                ov.put_text(img, game, (x + 4, y + 62), 0.8, TEXT, 2)
+                y += 32
             ov.draw_legend(img, x, y + 44, self.legend_w)
             return
         for k, team in enumerate(teams):
             ov.draw_team_hud(img, 12 + k * (self.block_w + 12), y, self.block_w, team, self.counters.stats(team))
         ov.put_text(img, f"t = {t:.1f} s", (12, y + hud_h + 30), 1.0, TEXT, 2)
+        ov.put_text(img, self.game_text(getattr(self, "_row", {})), (230, y + hud_h + 30), 0.8, TEXT, 2)
         ov.draw_legend(img, 12, y + hud_h + 38, self.legend_w)
 
 

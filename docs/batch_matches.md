@@ -13,6 +13,42 @@ Uses ROS domains from `--domain-base` (150) and no web port, so it can run besid
 
 Options added later: `--trace`, `--record A:B`, `--parallel K`, `--yolo` (GPU), profiles `lat<ms>_loss<pct>` (netem.md). Each is below.
 
+## Full games (`--half-minutes M`, `--record full`)
+
+```
+pixi run python scripts/batch_matches.py --half-minutes 5 --profiles rcap_bad --matches 1 --seed 41 \
+    --home-brain current --away-brain baseline --baseline-root <baseline checkout> --trace --record full \
+    --out results/game1.csv
+```
+
+`--half-minutes M` builds the match non-continuous with halves of M minutes: the GameController plays INITIAL / READY / SET /
+PLAYING for the first half, the half-time pause, the second half (sides swapped, kick-off to the other team) and ends at
+FINISHED. `--duration` is ignored. The bridge keeps recording across the half-time FINISHED (`MatchBridge.match_over`: FINISHED
+ends the match only when `first_half` is false or the match is continuous) and writes the metrics when the second half is
+over; `--metrics-play-secs` is 2*M*60 + 60 s, a safety net only. Metrics accumulate PLAY time of both halves (`play_s` is about
+2*M*60); `goals_home` / `goals_away` are the final score (JSON `score`, CSV columns). Home and away stay the same teams in the
+second half (their goals are theirs); only the pitch ends swap.
+
+Wall time limit per match: `game_secs` = 2 halves of play + per half INITIAL (3 s) + `--ready-secs` + SET (3 s) + the 5 s
+half-time pause, plus `--timeout-extra`, plus the render allowance when recording. A 2 x 5 min game with the default
+`--ready-secs` is 629 simulated s.
+
+`--record full` (match_node `--record-window full`) records every sample from the first frame to FINISHED: READY, SET,
+half-time and both halves, at the recorder's 25 fps (about 15,700 frames for 2 x 5 min). The caption still comes from
+`--metrics-meta`. The render happens after the match ends, so the runner's render allowance is `max(600 s, 0.06 s x frames)`
+(about 30 ms per frame plus encode, doubled for slack): 944 s for the 2 x 5 min game. `--record A:B` keeps the 600 s floor.
+
+The trace of a full game (`--half-minutes` or `--record full`, with `--trace`; match_node `--trace-all`) is 10 Hz of simulated
+time in every state. Each row keeps its old fields (`t` is PLAY seconds and holds still outside PLAY, so it runs on across
+the halves) and adds `state`, `half` (1/2), `score` {home, away} and `sim_t`. `render_replay.py` shows the half, score and
+(outside PLAYING) the state next to the time when the rows have them; `--t0/--t1` stay PLAY seconds.
+
+Per-game statistics: `summarise_batch.py --games results/game1.csv [more.csv] [--out games.json]` prints, for each game and team
+(home/away, brain, network), goals and chase flips/min, duplicate decision, chaser present, reaction median/p90 and fused ball
+error; per profile and side a mean with Student-t 95% CI over games; and per profile a Mann-Whitney U between the new-brain
+teams' values and the pre-change teams' values (either side, so side-swapped runs pool), with both means and pct_change.
+JSON keys: `teams`, `sides`, `tests`.
+
 ## Trace (`--trace`) and replay
 
 `--trace` makes the bridge write `<stem>.trace.jsonl` next to the match JSON (`match_node --trace-out`, which needs
@@ -135,7 +171,7 @@ pixi run python scripts/batch_matches.py --profiles good,rcap_bad --matches 10 -
 - Output names carry `<home>-vs-<away>` instead of the brain, and `_home-<P>` / `_away-<P>` when the per-team networks are set.
 - `--parallel K>1` is refused unless every robot is namespaced (no `none` profile, also not via the other team).
 - SIGINT/SIGTERM kill every running match's process group first, then run `netem.sh down` for the slots in use.
-- With `--record` the metrics JSON is written before the clip is closed; the runner allows 600 s extra wall time for the render.
+- With `--record` the metrics JSON is written before the clip is closed; the runner allows 600 s extra wall time for the render (more for `--record full`, see above).
 - Appending to a CSV whose header differs (older columns) is refused; write to a new `--out` or rewrite the header.
 - `summarise_batch.py --main` reduces each metric to one value per match (mean of home and away) and reports `n` = matches,
   `meta.unit = "match"`; `goal_diff` is only in the `--h2h` output. The CSV/JSON get `home_brain`, `away_brain`, `home_profile`,
