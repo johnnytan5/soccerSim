@@ -1,0 +1,170 @@
+[
+ {
+  "game": "games_good_current-vs-baseline_1",
+  "profile": "good",
+  "seed": 42,
+  "play_s": 587.5,
+  "loose_share": 0.572,
+  "ball_events": 84,
+  "teams": {
+   "home": {
+    "brain": "current",
+    "goals": 1,
+    "possession": 0.266,
+    "territory": 0.446,
+    "chasers": 1.078,
+    "chase_share": 0.27,
+    "first_touch": 0.524
+   },
+   "away": {
+    "brain": "baseline",
+    "goals": 0,
+    "possession": 0.163,
+    "territory": 0.532,
+    "chasers": 0.997,
+    "chase_share": 0.249,
+    "first_touch": 0.476
+   }
+  }
+ },
+ {
+  "game": "games_good_current-vs-baseline_2",
+  "profile": "good",
+  "seed": 43,
+  "play_s": 587.5,
+  "loose_share": 0.457,
+  "ball_events": 99,
+  "teams": {
+   "home": {
+    "brain": "current",
+    "goals": 1,
+    "possession": 0.357,
+    "territory": 0.271,
+    "chasers": 1.044,
+    "chase_share": 0.261,
+    "first_touch": 0.687
+   },
+   "away": {
+    "brain": "baseline",
+    "goals": 0,
+    "possession": 0.186,
+    "territory": 0.711,
+    "chasers": 1.014,
+    "chase_share": 0.253,
+    "first_touch": 0.303
+   }
+  }
+ },
+ {
+  "game": "games_rcap_bad_current-vs-baseline_0",
+  "profile": "rcap_bad",
+  "seed": 41,
+  "play_s": 570.6,
+  "loose_share": 0.542,
+  "ball_events": 99,
+  "teams": {
+   "home": {
+    "brain": "current",
+    "goals": 2,
+    "possession": 0.239,
+    "territory": 0.521,
+    "chasers": 1.062,
+    "chase_share": 0.266,
+    "first_touch": 0.515
+   },
+   "away": {
+    "brain": "baseline",
+    "goals": 0,
+    "possession": 0.219,
+    "territory": 0.426,
+    "chasers": 1.006,
+    "chase_share": 0.251,
+    "first_touch": 0.485
+   }
+  }
+ },
+ {
+  "game": "games_rcap_bad_current-vs-baseline_1",
+  "profile": "rcap_bad",
+  "seed": 42,
+  "play_s": 587.2,
+  "loose_share": 0.628,
+  "ball_events": 122,
+  "teams": {
+   "home": {
+    "brain": "current",
+    "goals": 2,
+    "possession": 0.184,
+    "territory": 0.732,
+    "chasers": 1.035,
+    "chase_share": 0.259,
+    "first_touch": 0.516
+   },
+   "away": {
+    "brain": "baseline",
+    "goals": 1,
+    "possession": 0.188,
+    "territory": 0.226,
+    "chasers": 1.171,
+    "chase_share": 0.293,
+    "first_touch": 0.484
+   }
+  }
+ },
+ {
+  "game": "games_rcap_bad_current-vs-baseline_2",
+  "profile": "rcap_bad",
+  "seed": 43,
+  "play_s": 571.5,
+  "loose_share": 0.508,
+  "ball_events": 99,
+  "teams": {
+   "home": {
+    "brain": "current",
+    "goals": 0,
+    "possession": 0.336,
+    "territory": 0.172,
+    "chasers": 1.003,
+    "chase_share": 0.251,
+    "first_touch": 0.616
+   },
+   "away": {
+    "brain": "baseline",
+    "goals": 0,
+    "possession": 0.156,
+    "territory": 0.77,
+    "chasers": 1.051,
+    "chase_share": 0.263,
+    "first_touch": 0.384
+   }
+  }
+ },
+ {
+  "game": "games_redo_good_current-vs-baseline_0",
+  "profile": "good",
+  "seed": 41,
+  "play_s": 591.3,
+  "loose_share": 0.583,
+  "ball_events": 107,
+  "teams": {
+   "home": {
+    "brain": "current",
+    "goals": 1,
+    "possession": 0.24,
+    "territory": 0.507,
+    "chasers": 1.018,
+    "chase_share": 0.254,
+    "first_touch": 0.505
+   },
+   "away": {
+    "brain": "baseline",
+    "goals": 0,
+    "possession": 0.177,
+    "territory": 0.468,
+    "chasers": 0.992,
+    "chase_share": 0.248,
+    "first_touch": 0.495
+   }
+  }
+ }
+]
