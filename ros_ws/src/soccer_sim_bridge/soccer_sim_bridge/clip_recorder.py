@@ -33,7 +33,7 @@ STOP = None
 class ClipRecorder:
     """Parent side: spawns the renderer, forwards frames from a thread so the sim loop only ever does a queue put."""
 
-    def __init__(self, viewer_model, tints: dict, out: str, window: tuple[float, float], log=print, gl: str = "cpu",
+    def __init__(self, viewer_model, tints: dict, out: str, window: tuple[float, float] | None, log=print, gl: str = "cpu",
                  caption: dict | None = None):
         import tempfile
 
@@ -57,8 +57,17 @@ class ClipRecorder:
         self._thread = threading.Thread(target=self._pump, name="clip-recorder", daemon=True)
         self._thread.start()
 
+    @property
+    def full(self) -> bool:
+        """`--record-window full`: the whole game, every state (INITIAL, READY, SET, PLAYING, half-time, FINISHED)."""
+        return self.window is None
+
     def in_window(self, play_s: float) -> bool:
-        return self.window[0] <= play_s <= self.window[1]
+        return self.full or self.window[0] <= play_s <= self.window[1]
+
+    def wants(self, play_s: float, playing: bool) -> bool:
+        """Record this sample? A window records PLAY seconds a..b; full records every sample, PLAY or not."""
+        return self.full or (playing and self.in_window(play_s))
 
     def offer(self, qpos: np.ndarray, info: dict) -> None:
         """Queue one frame, never blocking. `info` is the trace row (match_node._trace_row): t, ball {x, y}, blackout and per

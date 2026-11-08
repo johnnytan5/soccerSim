@@ -228,6 +228,7 @@ class MatchBridge:
         self.trace_path = ""  # --trace-out: JSONL, one row per 0.1 s of PLAY (sampled in _record_metrics)
         self._trace_file = None
         self._trace_next = 0.0
+        self.trace_all = False  # --trace-all: rows in every game state, not only PLAY
         self.finished = False  # the metrics run reached its PLAY time: the run loops stop
         self.shot_panel = ShotPanel()
         self._log = lambda text: print(f"[match] {text}", flush=True)
@@ -546,23 +547,36 @@ class MatchBridge:
         state = window_state(time.monotonic(), self._blackout_window()) if playing else "outside"
         self.recorder.add(Sample(self.tick_count * self.world.policy_dt, playing, (st["ball"]["x"], st["ball"]["y"]), robots,
                                  blackout=state == "dark", ramp=state == "ramp"))
-        clip = self.clip is not None and playing and self.clip.in_window(self.recorder.play_s)
-        trace = self._trace_file is not None and playing and self.recorder.play_s >= self._trace_next
+        clip = self.clip is not None and self.clip.wants(self.recorder.play_s, playing)
+        if self.trace_all:  # whole game: a fixed 10 Hz grid in simulated time, every state
+            sim_t = self.tick_count * self.world.policy_dt
+            trace = self._trace_file is not None and sim_t >= self._trace_next
+        else:
+            trace = self._trace_file is not None and playing and self.recorder.play_s >= self._trace_next
         if trace or clip:
             row = self._trace_row(st, views, robots, blackout=state == "dark")
             row["ramp"] = state == "ramp"
         if trace:
-            self._trace_next = max(self._trace_next + TRACE_PERIOD_S, self.recorder.play_s - TRACE_PERIOD_S / 2)  # fixed 10 Hz grid
+            now_t = sim_t if self.trace_all else self.recorder.play_s
+            self._trace_next = max(self._trace_next + TRACE_PERIOD_S, now_t - TRACE_PERIOD_S / 2)  # fixed 10 Hz grid
             self._trace_file.write(json.dumps(row, separators=(",", ":")) + "\n")
         if clip:  # 25 Hz: the renderer process draws it (clip_recorder.py); the sim only queues the pose and the trace row
             # (ball, blackout, per robot decision, outfield_rank, im_lead, comm_mode, fused_ball: what the overlays need)
             self.clip.offer(self.world.mj_data.qpos, row)
-        if self.recorder.play_s >= self.metrics_secs or st["state"] == "FINISHED":
+        if self.recorder.play_s >= self.metrics_secs or self.match_over(st):
             self._write_metrics()
 
-    def enable_trace(self, path: str) -> None:
-        """--trace-out: needs the metrics recorder (rows come from its sampling path, at TRACE_HZ of PLAY time)."""
+    @staticmethod
+    def match_over(st: dict) -> bool:
+        """FINISHED ends the match, except the half-time FINISHED of a two-half game (first_half still set): the second
+        half follows it and the metrics keep accumulating PLAY time across both halves."""
+        return st["state"] == "FINISHED" and (st.get("continuous") or not st.get("first_half", True))
+
+    def enable_trace(self, path: str, whole_game: bool = False) -> None:
+        """--trace-out: needs the metrics recorder (rows come from its sampling path, at TRACE_HZ of PLAY time, or with
+        `whole_game` at TRACE_HZ of simulated time in every state, with the state, half and score in each row)."""
         self.trace_path = path
+        self.trace_all = whole_game
         self._trace_file = open(path, "w")
 
     def _trace_row(self, st: dict, views: dict, samples: list, blackout: bool) -> dict:
@@ -587,7 +601,11 @@ class MatchBridge:
             })
         row = {"t": round(self.recorder.play_s, 3), "ball": {"x": round(st["ball"]["x"], 3), "y": round(st["ball"]["y"], 3),
                                                               "vx": round(vx, 3), "vy": round(vy, 3)},
-               "blackout": blackout, "robots": rows}
+               "blackout": blackout, "robots": rows,
+               # game context (whole-game traces and clips); the fields above are unchanged
+               "state": st["state"], "half": 1 if st.get("first_half", True) else 2,
+               "score": {"home": self.gc.score.get(HOME, 0), "away": self.gc.score.get(AWAY, 0)},
+               "sim_t": round(self.tick_count * self.world.policy_dt, 3)}
         return row
 
     def _close_clip(self) -> None:
@@ -828,7 +846,8 @@ def parse_args(argv):
     p.add_argument("--trace-out", default="", help="with --metrics-out: JSONL trace of the PLAY phase at 10 Hz (ball, robots, roles, links)")
     p.add_argument("--record", default="", help="with --metrics-out: MP4 of a window of the match, rendered from a free camera "
                    "above the pitch (720p, 25 fps, GPU GL, h264_nvenc) by a separate process")
-    p.add_argument("--record-window", default="20:40", help="PLAY seconds a:b of --record")
+    p.add_argument("--trace-all", action="store_true", help="--trace-out covers the whole game (every state, 10 Hz of simulated time)")
+    p.add_argument("--record-window", default="20:40", help="PLAY seconds a:b of --record, or 'full': the whole game, every state")
     p.add_argument("--metrics-meta", default="{}", help="JSON object copied into the metrics file")
     return p.parse_args(argv)
 
@@ -852,11 +871,12 @@ def _run_mujoco(args, bridge: MatchBridge, cfg: SimConfig, roster, viewer_env) -
     if args.record:
         from .clip_recorder import ClipRecorder
         a, _, b = args.record_window.partition(":")
+        window = None if args.record_window == "full" else (float(a), float(b))
         # The recorder starts before enable_metrics() runs, so read the match meta from the arguments directly.
         meta = bridge.metrics_meta or (json.loads(args.metrics_meta) if getattr(args, "metrics_meta", None) else {})
         brains = [b for b in dict.fromkeys((meta.get("home_brain"), meta.get("away_brain"))) if b] or [meta.get("brain") or ""]
         caption = {"label": " vs ".join(brains), "situation": meta.get("profile"), "seed": meta.get("seed")}
-        bridge.clip = ClipRecorder(build_world(cfg, len(roster), strip_visual=True), tints, args.record, (float(a), float(b)),
+        bridge.clip = ClipRecorder(build_world(cfg, len(roster), strip_visual=True), tints, args.record, window,
                                    bridge._log, os.environ.get("SIM_RECORD_GL", "cpu"), caption)
     try:
         if args.viewer and sys.platform == "darwin":
@@ -912,7 +932,7 @@ def main(argv=None) -> None:
         bridge.enable_metrics(args.metrics_out, args.metrics_play_secs, json.loads(args.metrics_meta))
         bridge.play_flag, bridge.blackout_file = args.play_flag, args.blackout_file
         if args.trace_out:
-            bridge.enable_trace(args.trace_out)
+            bridge.enable_trace(args.trace_out, args.trace_all or (args.record and args.record_window == "full"))
     elif args.trace_out or args.record:
         raise SystemExit("--trace-out / --record need --metrics-out (they reuse the metrics sampling)")
     if args.record and kinematic:
