@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 import time
 
 import pytest
@@ -176,3 +177,48 @@ def test_event_wait_wakes_on_logs_and_state(world):
     snap_before = jobs.snapshot()["version"]
     jobs.refresh("")  # first probe changes the cached rcap info
     assert jobs.snapshot()["version"] >= snap_before
+
+
+def test_match_with_team_folders_builds_each_once_then_skips_until_changed(world):
+    local, rcap, store, _ = world
+    home = rcap.parent / "home_re"
+    (home / "src" / "brain").mkdir(parents=True)
+    (home / "src" / "brain" / "a.cpp").write_text("x")
+    cfg = LaunchConfig(rcap_root=str(rcap), viewer=False, ros_domain_id=3,
+                       players=[{"team": "home", "player_id": 1, "role": "goal_keeper"},
+                                {"team": "away", "player_id": 1, "role": "goal_keeper"}],
+                       home_brain_root=str(home), away_brain_root=str(home))
+
+    class R(FakeRunner):
+        def run(self, argv, env, on_line):
+            if "SS_WS_DIR" in env and argv[:2] == build.BUILD_ARGV:  # a team build
+                (Path(env["SS_WS_DIR"]) / "install").mkdir(parents=True, exist_ok=True)
+                (Path(env["SS_WS_DIR"]) / "install" / "setup.bash").write_text("")
+            return super().run(argv, env, on_line)
+
+    runner = R(local)
+    runner.block_on = "scripts/run_match.sh"
+    runner.release.set()
+    jobs = JobController(store, runner, local, port_picker=lambda: 1)
+    assert jobs.launch(cfg)["ok"]
+    wait_idle(jobs)
+    assert [c[0][1] for c in runner.calls] == ["scripts/setup_ws.sh", "scripts/setup_ws.sh", "scripts/run_match.sh"]
+    team_env = runner.calls[1][1]
+    assert team_env["ROBOTEDGE_ROOT"] == str(home) and "ros_ws_brains" in team_env["SS_WS_DIR"]
+    assert runner.calls[2][1]["SS_WS_DIR"] == team_env["SS_WS_DIR"]
+
+    runner2 = R(local)
+    runner2.block_on = "scripts/run_match.sh"
+    runner2.release.set()
+    jobs2 = JobController(store, runner2, local, port_picker=lambda: 1)
+    assert jobs2.launch(cfg)["ok"]
+    wait_idle(jobs2)
+    assert [c[0][1] for c in runner2.calls] == ["scripts/run_match.sh"]  # nothing changed: no rebuild
+    (home / "src" / "brain" / "a.cpp").write_text("edited")
+    runner3 = R(local)
+    runner3.block_on = "scripts/run_match.sh"
+    runner3.release.set()
+    jobs3 = JobController(store, runner3, local, port_picker=lambda: 1)
+    assert jobs3.launch(cfg)["ok"]
+    wait_idle(jobs3)
+    assert [c[0][1] for c in runner3.calls] == ["scripts/setup_ws.sh", "scripts/run_match.sh"]  # only the team brain

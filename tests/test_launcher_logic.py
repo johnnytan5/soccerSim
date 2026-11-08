@@ -1,9 +1,11 @@
 import json
+import re
 import subprocess
+from pathlib import Path
 
 import pytest
 
-from soccer_launcher import build, command, preflight, rcap
+from soccer_launcher import brains, build, command, preflight, rcap
 from soccer_launcher.config import PRESETS, LaunchConfig
 from soccer_launcher.store import Store
 
@@ -376,3 +378,81 @@ def test_match_command_passes_the_packet_budget_to_the_bridge():
     assert m[m.index("--packet-budget") + 1] == "500"
     _, env = command.build_command(PRESETS[5].config)
     assert env["MATCH_ARGS"].split()[env["MATCH_ARGS"].split().index("--packet-budget") + 1] == "60000"
+
+
+# ---- per-team brains ------------------------------------------------------
+def _match_cfg(**kw):
+    return LaunchConfig(**{**PRESETS[5].config.to_dict(), **kw})
+
+
+def test_no_team_folders_leaves_the_match_command_unchanged(tmp_path):
+    argv, env = command.build_command(_match_cfg(), "/rcap", None, tmp_path)
+    assert not any("brain_" in a for a in argv) and "SS_WS_DIR" not in env
+
+
+def test_one_team_folder_passes_install_and_root_for_that_team_only(tmp_path):
+    home = tmp_path / "Robotedge-A"
+    argv, env = command.build_command(_match_cfg(home_brain_root=str(home)), "/rcap", None, tmp_path)
+    ws = brains.workspace(home, tmp_path)
+    assert f"home_brain_install:={ws}/install" in argv and f"home_brain_root:={home}" in argv
+    assert not any(a.startswith("away_brain") for a in argv)
+    assert env["SS_WS_DIR"] == str(ws)
+
+
+def test_two_team_folders_get_separate_workspaces(tmp_path):
+    a, b = tmp_path / "x" / "Robotedge", tmp_path / "y" / "Robotedge"  # same name, different place
+    argv, env = command.build_command(_match_cfg(home_brain_root=str(a), away_brain_root=str(b)), None, None, tmp_path)
+    wa, wb = brains.workspace(a, tmp_path), brains.workspace(b, tmp_path)
+    assert wa != wb
+    assert {f"home_brain_install:={wa}/install", f"away_brain_install:={wb}/install",
+            f"home_brain_root:={a}", f"away_brain_root:={b}"} <= set(argv)
+    assert env["SS_WS_DIR"] == f"{wa}:{wb}"
+    assert command.build_command(_match_cfg(home_brain_root=str(a), away_brain_root=str(a)), None, None, tmp_path)[1][
+        "SS_WS_DIR"] == str(wa)  # one folder for both teams: built and overlaid once
+    assert "ros_ws_brains" in command.render(_match_cfg(home_brain_root=str(a)), None, None, tmp_path)
+
+
+def test_team_folders_only_apply_to_matches_and_roundtrip(tmp_path):
+    single = LaunchConfig(home_brain_root=str(tmp_path))
+    assert brains.team_folders(single) == {}
+    assert all("brain_" not in a for a in command.build_command(single)[0])
+    cfg = _match_cfg(away_brain_root="~/Robotedge-B")
+    assert LaunchConfig.from_dict(cfg.to_dict()) == cfg
+    assert brains.team_folders(cfg) == {"away": str(Path("~/Robotedge-B").expanduser())}
+
+
+def test_workspace_naming(tmp_path):
+    name = brains.sanitize("/home/me/My Robotedge (v2)/")
+    assert re.fullmatch(r"My_Robotedge_v2-[0-9a-f]{8}", name)
+    assert brains.sanitize("/a/b") == brains.sanitize("/a/b/") != brains.sanitize("/a/c")
+    assert brains.workspace("/a/b", tmp_path) == tmp_path / "ros_ws_brains" / brains.sanitize("/a/b")
+    assert brains.build_env("/a/b", tmp_path) == {"SS_WS_DIR": str(brains.workspace("/a/b", tmp_path)),
+                                                  "ROBOTEDGE_ROOT": "/a/b"}
+
+
+def test_team_brain_build_staleness(fake_rcap, fake_local):
+    ws = brains.workspace(fake_rcap, fake_local)
+    st = brains.check(fake_rcap, fake_local)
+    assert st.stale and st.reason == "not built yet"
+    (ws / "install").mkdir(parents=True)
+    (ws / "install" / "setup.bash").write_text("")
+    build.write_stamp(fake_rcap, st.fingerprint, None, ws)
+    assert not brains.check(fake_rcap, fake_local).stale
+    (fake_rcap / "src" / "brain" / "src" / "brain.cpp").write_text("edit")
+    assert brains.check(fake_rcap, fake_local).stale
+
+
+def _load_match_launch():
+    path = Path(__file__).resolve().parents[1] / "ros_ws/src/soccer_sim_bridge/launch/match.launch.py"
+    src = path.read_text()
+    ns: dict = {}
+    # the launch/launch_ros imports are only needed by generate_launch_description, not by team_brain()
+    exec(compile(src.split("from launch import")[0] + src[src.index("TEAM_NUMBERS"):src.index("def _brains")], str(path), "exec"), ns)
+    return ns
+
+
+def test_team_brain_helper():
+    team_brain = _load_match_launch()["team_brain"]
+    assert team_brain("home", "", "", "/default") == (None, "/default")
+    assert team_brain("home", "/ws/install", "/RE", "/default") == ("/ws/install/brain/lib/brain/brain_node", "/RE")
+    assert team_brain("away", "", "/RE", "/default") == (None, "/RE")
